@@ -1181,7 +1181,7 @@ function renderFavs(d) {
     html += '<div style="display:flex;align-items:center;gap:6px">';
     if(isLive) html += '<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">LIVE</span>';
     if(isFinal) html += '<span style="font-size:9px;background:rgba(0,0,0,0.2);color:'+d.text+';border-radius:4px;padding:1px 5px;font-weight:700">종료</span>';
-    html += '<button onclick="event.stopPropagation();toggleFav(g)" style="font-size:11px;color:#E31837;border:1px solid #E31837;border-radius:6px;padding:3px 8px;font-weight:700;font-family:\'Noto Sans KR\',sans-serif">⭐ 해제</button>';
+
     html += '</div></div>';
     html += '<div style="display:flex;align-items:center;justify-content:space-between">';
     html += '<div style="display:flex;align-items:center;gap:6px;flex:1">'+logo(lKey,30)+'<span style="font-size:12px;font-weight:700;color:'+(lKey==='KIA'?'#ff6b6b':d.text)+'">'+(T[lKey]?T[lKey].name:lKey)+'</span></div>';
@@ -1724,20 +1724,17 @@ setInterval(()=>{state.clock=new Date();render();},1000);
 
   function getWeekRows() {
     const grid = document.getElementById('cal-grid-body');
-    if(!grid) return {all:[], current:[]};
+    if(!grid) return [];
     const cells = Array.from(grid.querySelectorAll('.cal-cell'));
-    const all = [];
-    for(let i=0; i<cells.length; i+=7) all.push(cells.slice(i,i+7));
-    const current = all.filter(row => row.some(c=>c.classList.contains('current-week')));
-    return {all, current};
+    const rows = [];
+    for(let i=0; i<cells.length; i+=7) rows.push(cells.slice(i,i+7));
+    return rows;
   }
 
-  function collapse() {
-    if(isCollapsed || state.tab!=='cal') return;
-    const {all, current} = getWeekRows();
-    if(!all.length) return;
-    isCollapsed = true;
-    all.forEach(row => {
+  function applyCollapse() {
+    const rows = getWeekRows();
+    if(!rows.length) return;
+    rows.forEach(row => {
       const isCur = row.some(c=>c.classList.contains('current-week'));
       row.forEach(c => { c.style.display = isCur ? '' : 'none'; });
     });
@@ -1745,25 +1742,30 @@ setInterval(()=>{state.clock=new Date();render();},1000);
     if(divider) divider.style.display = 'block';
   }
 
-  function expand() {
-    if(!isCollapsed || state.tab!=='cal') return;
-    const {all} = getWeekRows();
-    isCollapsed = false;
-    all.forEach(row => row.forEach(c => { c.style.display = ''; }));
+  function applyExpand() {
+    const rows = getWeekRows();
+    rows.forEach(row => row.forEach(c => { c.style.display = ''; }));
     const divider = document.getElementById('cal-divider');
     if(divider) divider.style.display = 'none';
   }
 
   window.addEventListener('scroll', function() {
     if(state.tab !== 'cal') return;
-    if(window.scrollY > 80) collapse();
-    else if(window.scrollY < 10) expand();
+    if(window.scrollY > 120 && !isCollapsed) {
+      isCollapsed = true;
+      applyCollapse();
+    } else if(window.scrollY === 0 && isCollapsed) {
+      isCollapsed = false;
+      applyExpand();
+    }
   }, {passive:true});
 
-  // render 후 상태 리셋
-  const origRender = window.render;
-  // render 후 isCollapsed 초기화
-  document.addEventListener('renderDone', ()=>{ isCollapsed=false; });
+  // render 후에도 현재 상태 유지 (리셋 안 함)
+  document.addEventListener('renderDone', ()=>{
+    if(state.tab !== 'cal') return;
+    if(isCollapsed) applyCollapse();
+    // expand는 건드리지 않음
+  });
 })();
 
 // ── 탭 스와이프 ──
