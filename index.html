@@ -961,7 +961,7 @@ function renderCalSplit(d) {
     const diffDays = Math.round((nextD-nowD)/(1000*60*60*24));
     const opp2 = nextKia.home==='KIA'?nextKia.away:nextKia.home;
     const isHome2 = nextKia.home==='KIA';
-    countdownHtml = `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+    countdownHtml = `<div id="countdown-banner" style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
       <div style="font-size:22px">⏱️</div>
       <div style="flex:1">
         <div style="font-size:11px;color:${d.sub};font-weight:700">다음 KIA 경기</div>
@@ -1771,10 +1771,20 @@ setInterval(()=>{state.clock=new Date();render();},1000);
 
   window.addEventListener('scroll', function() {
     if(state.tab !== 'cal') return;
-    if(window.scrollY > 120 && !isCollapsed) {
+    const banner = document.getElementById('countdown-banner');
+    let bannerGone;
+    if(banner) {
+      // 배너가 화면 위로 완전히 사라졌는지 확인
+      const rect = banner.getBoundingClientRect();
+      bannerGone = rect.bottom <= 0;
+    } else {
+      // 배너 없으면 scrollY 기준
+      bannerGone = window.scrollY > 120;
+    }
+    if(bannerGone && !isCollapsed) {
       isCollapsed = true;
       applyCollapse();
-    } else if(window.scrollY === 0 && isCollapsed) {
+    } else if(!bannerGone && isCollapsed) {
       isCollapsed = false;
       applyExpand();
     }
