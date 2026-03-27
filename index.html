@@ -1029,14 +1029,14 @@ function renderFavs(d) {
   }
 
   let html = '<div style="font-size:12px;font-weight:700;color:'+d.sub+';margin-bottom:12px">⭐ '+favGames.length+'개의 즐겨찾기</div>';
-  favGames.forEach(g => {
+  favGames.forEach(function(g) {
     const isKia=g.away==='KIA'||g.home==='KIA';
     const kiaHome=g.home==='KIA';
     const lKey=isKia&&kiaHome?g.home:g.away;
     const rKey=isKia&&kiaHome?g.away:g.home;
     const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
-    const lScore=kiaHome?(g.homeScore??0):(g.awayScore??0);
-    const rScore=kiaHome?(g.awayScore??0):(g.homeScore??0);
+    const lScore=kiaHome?(g.homeScore!=null?g.homeScore:0):(g.awayScore!=null?g.awayScore:0);
+    const rScore=kiaHome?(g.awayScore!=null?g.awayScore:0):(g.homeScore!=null?g.homeScore:0);
 
     html += '<div class="card'+(isKia?' kia':'')+'" onclick="openGameByKey(this)" data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
@@ -1047,61 +1047,15 @@ function renderFavs(d) {
     html += '<button onclick="event.stopPropagation();toggleFav(g)" style="font-size:16px">⭐</button>';
     html += '</div></div>';
     html += '<div style="display:flex;align-items:center;justify-content:space-between">';
-    html += '<div style="display:flex;align-items:center;gap:6px;flex:1">'+logo(lKey,30)+'<span style="font-size:12px;font-weight:700;color:'+(lKey==='KIA'?'#ff6b6b':d.text)+'">'+( T[lKey]?.name||lKey)+'</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:6px;flex:1">'+logo(lKey,30)+'<span style="font-size:12px;font-weight:700;color:'+(lKey==='KIA'?'#ff6b6b':d.text)+'">'+(T[lKey]?T[lKey].name:lKey)+'</span></div>';
     html += '<div style="padding:0 8px;text-align:center">';
     if(isLive||isFinal) html += '<span style="font-size:16px;font-weight:900;color:'+d.text+'">'+lScore+' : '+rScore+'</span>';
     else html += '<span style="font-size:11px;font-weight:700;color:#FFB300">'+g.time+'</span>';
     html += '</div>';
-    html += '<div style="display:flex;align-items:center;gap:6px;flex:1;flex-direction:row-reverse">'+logo(rKey,30)+'<span style="font-size:12px;font-weight:700;color:'+(rKey==='KIA'?'#ff6b6b':d.text)+';text-align:right">'+(T[rKey]?.name||rKey)+'</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:6px;flex:1;flex-direction:row-reverse">'+logo(rKey,30)+'<span style="font-size:12px;font-weight:700;color:'+(rKey==='KIA'?'#ff6b6b':d.text)+';text-align:right">'+(T[rKey]?T[rKey].name:rKey)+'</span></div>';
     html += '</div></div>';
   });
   return html;
-}
-
-
-  const favGames = SCH.filter(g=>isFav(g));
-  favGames.sort((a,b)=>a.date.localeCompare(b.date));
-
-  if(!favGames.length) return `
-    <div style="text-align:center;padding:60px 20px">
-      <div style="font-size:40px;margin-bottom:12px">⭐</div>
-      <div style="font-size:15px;font-weight:700;color:${d.text}">즐겨찾기가 없어요</div>
-      <div style="font-size:12px;color:${d.sub};margin-top:6px">경기 카드의 ☆를 눌러 추가해보세요</div>
-    </div>`;
-
-  return `
-    <div style="font-size:12px;font-weight:700;color:${d.sub};margin-bottom:12px">⭐ ${favGames.length}개의 즐겨찾기</div>
-    ${favGames.map((g,i)=>{
-      const isKia=g.away==='KIA'||g.home==='KIA';
-      const kiaHome=g.home==='KIA';
-      const lKey=isKia&&kiaHome?g.home:g.away;
-      const rKey=isKia&&kiaHome?g.away:g.home;
-      const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
-      const scoreHtml=(isLive||isFinal)
-        ?`<div style="font-size:16px;font-weight:900;color:${d.text}">${kiaHome?(g.homeScore??0):(g.awayScore??0)} : ${kiaHome?(g.awayScore??0):(g.homeScore??0)}</div>`
-        :`<div style="font-size:11px;font-weight:700;color:#FFB300">${g.time}</div>`;
-      return `<div class="card${isKia?' kia':''}" onclick="openGameByKey('${g.date}','${g.away}','${g.home}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <span style="font-size:10px;color:${d.sub}">${g.date}</span>
-          <div style="display:flex;align-items:center;gap:6px">
-            ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">LIVE</span>`:''}
-            ${isFinal?`<span style="font-size:9px;background:rgba(0,0,0,0.2);color:${d.text};border-radius:4px;padding:1px 5px;font-weight:700">종료</span>`:''}
-            <button onclick="event.stopPropagation();toggleFav(g)" style="font-size:16px">⭐</button>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="display:flex;align-items:center;gap:6px;flex:1">
-            ${logo(lKey,30)}
-            <span style="font-size:12px;font-weight:700;color:${lKey==='KIA'?'#ff6b6b':d.text}">${T[lKey]?.name||lKey}</span>
-          </div>
-          <div style="padding:0 8px">${scoreHtml}</div>
-          <div style="display:flex;align-items:center;gap:6px;flex:1;flex-direction:row-reverse">
-            ${logo(rKey,30)}
-            <span style="font-size:12px;font-weight:700;color:${rKey==='KIA'?'#ff6b6b':d.text};text-align:right">${T[rKey]?.name||rKey}</span>
-          </div>
-        </div>
-      </div>`;
-    }).join('')}`;
 }
 
 function renderStand(d) {
@@ -1262,47 +1216,31 @@ function renderModal(d) {
         </div>
         <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
       </div>
-      ${(g.awayStarter||g.homeStarter)?`<div style="margin-bottom:18px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
-          <span style="font-size:15px">🎯</span>
-          <span style="font-size:13px;font-weight:800;color:${d.text}">선발투수</span>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-              ${logo(g.away,18)}
-              <span style="font-size:10px;font-weight:700;color:${d.sub}">${g.away}</span>
-            </div>
-            <div style="font-size:14px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
-          </div>
-          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-              ${logo(g.home,18)}
-              <span style="font-size:10px;font-weight:700;color:${d.sub}">${g.home}</span>
-            </div>
-            <div style="font-size:14px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
-          </div>
-        </div>
-      </div>`:''}`
-      ${isFinal&&(g.winPitcher||g.losePitcher)?`<div style="margin-bottom:18px">
+      ${(g.awayStarter||g.homeStarter||g.winPitcher||g.losePitcher)?`<div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
           <span style="font-size:15px">⚾</span>
-          <span style="font-size:13px;font-weight:800;color:${d.text}">투수</span>
+          <span style="font-size:13px;font-weight:800;color:${d.text}">${isFinal?'투수':'선발투수'}</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${isFinal&&(g.winPitcher||g.losePitcher)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           ${g.winPitcher?`<div style="background:rgba(0,200,100,0.08);border:1px solid rgba(0,200,100,0.25);border-radius:12px;padding:12px">
-            <div style="font-size:9px;font-weight:700;color:#00C864;margin-bottom:4px">
-              <span style="background:rgba(0,200,100,0.15);border-radius:4px;padding:1px 6px">승</span> 승리투수
-            </div>
+            <div style="font-size:9px;font-weight:700;color:#00C864;margin-bottom:4px"><span style="background:rgba(0,200,100,0.15);border-radius:4px;padding:1px 6px">승</span> 승리투수</div>
             <div style="font-size:14px;font-weight:800;color:${d.text}">${g.winPitcher}</div>
           </div>`:''}
           ${g.losePitcher?`<div style="background:rgba(227,24,55,0.06);border:1px solid rgba(227,24,55,0.2);border-radius:12px;padding:12px">
-            <div style="font-size:9px;font-weight:700;color:#E31837;margin-bottom:4px">
-              <span style="background:rgba(227,24,55,0.12);border-radius:4px;padding:1px 6px">패</span> 패전투수
-            </div>
+            <div style="font-size:9px;font-weight:700;color:#E31837;margin-bottom:4px"><span style="background:rgba(227,24,55,0.12);border-radius:4px;padding:1px 6px">패</span> 패전투수</div>
             <div style="font-size:14px;font-weight:800;color:${d.text}">${g.losePitcher}</div>
           </div>`:''}
-        </div>
+        </div>`:''}
+        ${(g.awayStarter||g.homeStarter)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${logo(g.away,18)}<span style="font-size:10px;font-weight:700;color:${d.sub}">${g.away}</span></div>
+            <div style="font-size:14px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
+          </div>
+          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${logo(g.home,18)}<span style="font-size:10px;font-weight:700;color:${d.sub}">${g.home}</span></div>
+            <div style="font-size:14px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
+          </div>
+        </div>`:''}
       </div>`:''}
       <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
