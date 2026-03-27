@@ -39,7 +39,7 @@
     .cal-sticky{position:sticky;top:0;z-index:10;background:inherit;}
     .cal-wrap{transition:none}
     .cal-week-only .cal-grid#cal-grid-body .cal-cell:not(.current-week){display:none}
-    .cal-cell{min-height:68px;padding:3px 2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+    .cal-cell{min-height:68px;padding:3px 2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:opacity 0.25s ease,max-height 0.3s ease,padding 0.3s ease,min-height 0.3s ease}
     .cal-cell.sel{background:rgba(227,24,55,0.15)}
     .cal-cell.past{opacity:0.4}
     .cal-day{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;margin-top:2px;border:2px solid transparent}
@@ -992,13 +992,13 @@ function renderCalSplit(d) {
       </div>`;
     })()}
     ${countdownHtml}
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:4px;flex:1;justify-content:center">
-        <button onclick="prevMo()" style="color:#E31837;font-size:22px;padding:4px 8px;line-height:1">‹</button>
+    <div style="position:relative;display:flex;align-items:center;justify-content:center;margin-bottom:12px;height:36px">
+      <div style="position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:none">
+        <button onclick="prevMo()" style="color:#E31837;font-size:22px;padding:4px 8px;line-height:1;pointer-events:auto">‹</button>
         <div style="font-size:17px;font-weight:900;min-width:120px;text-align:center;color:${d.text}">${yr}년 ${mo}월</div>
-        <button onclick="nextMo()" style="color:#E31837;font-size:22px;padding:4px 8px;line-height:1">›</button>
+        <button onclick="nextMo()" style="color:#E31837;font-size:22px;padding:4px 8px;line-height:1;pointer-events:auto">›</button>
       </div>
-      <button onclick="goToday()" style="font-size:11px;font-weight:700;color:#E31837;border:1.5px solid #E31837;border-radius:8px;padding:4px 10px;white-space:nowrap">오늘</button>
+      <button onclick="goToday()" style="position:absolute;right:0;font-size:11px;font-weight:700;color:#E31837;border:1.5px solid #E31837;border-radius:8px;padding:4px 10px;white-space:nowrap">오늘</button>
     </div>
     <div id="cal-wrap" style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;overflow:hidden;margin-bottom:16px">
       <div class="cal-grid" style="border-bottom:1px solid ${d.bgB};background:${d.bg}">
@@ -1736,15 +1736,35 @@ setInterval(()=>{state.clock=new Date();render();},1000);
     if(!rows.length) return;
     rows.forEach(row => {
       const isCur = row.some(c=>c.classList.contains('current-week'));
-      row.forEach(c => { c.style.display = isCur ? '' : 'none'; });
+      row.forEach(c => {
+        if(isCur) {
+          c.style.opacity = '1';
+          c.style.minHeight = '68px';
+          c.style.maxHeight = '80px';
+          c.style.padding = '3px 2px';
+          c.style.overflow = '';
+        } else {
+          c.style.opacity = '0';
+          c.style.minHeight = '0';
+          c.style.maxHeight = '0';
+          c.style.padding = '0';
+          c.style.overflow = 'hidden';
+        }
+      });
     });
     const divider = document.getElementById('cal-divider');
-    if(divider) divider.style.display = 'block';
+    if(divider) { divider.style.display='block'; divider.style.opacity='1'; }
   }
 
   function applyExpand() {
     const rows = getWeekRows();
-    rows.forEach(row => row.forEach(c => { c.style.display = ''; }));
+    rows.forEach(row => row.forEach(c => {
+      c.style.opacity = '1';
+      c.style.minHeight = '68px';
+      c.style.maxHeight = '';
+      c.style.padding = '3px 2px';
+      c.style.overflow = '';
+    }));
     const divider = document.getElementById('cal-divider');
     if(divider) divider.style.display = 'none';
   }
