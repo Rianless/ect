@@ -683,7 +683,20 @@ const STAND=[
 let state = {
   tab:'cal', dark:false, yr:2026, mo:3, sel:'2026-03-28',
   lcat:'batting', modalGame:null, modalLt:'away', clock:new Date(),
+  memoTab: false,
 };
+// 즐겨찾기 로드
+let FAVS = JSON.parse(localStorage.getItem('kbo_favs')||'[]');
+function favKey(g) { return `${g.date}_${g.away}_${g.home}`; }
+function isFav(g) { return FAVS.includes(favKey(g)); }
+function toggleFav(g) {
+  const k=favKey(g);
+  if(FAVS.includes(k)) FAVS=FAVS.filter(x=>x!==k);
+  else FAVS.push(k);
+  localStorage.setItem('kbo_favs', JSON.stringify(FAVS));
+  render();
+  if(state.modalGame) renderModal(D());
+}
 
 const PC = {CF:{x:50,y:8},LF:{x:18,y:20},RF:{x:82,y:20},SS:{x:34,y:44},"2B":{x:64,y:44},P:{x:50,y:54},"3B":{x:18,y:62},"1B":{x:82,y:62},C:{x:50,y:80},DH:{x:10,y:80}};
 
@@ -777,11 +790,34 @@ function renderHeader(d) {
           </div>
         </div>
       </div>
+      ${(()=>{
+        const kstNow = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
+        const todayStr = kstNow.getFullYear()+'-'+String(kstNow.getMonth()+1).padStart(2,'0')+'-'+String(kstNow.getDate()).padStart(2,'0');
+        const todayKia = SCH.find(g=>g.date===todayStr&&(g.away==='KIA'||g.home==='KIA'));
+        if(!todayKia) return '';
+        const isHome=todayKia.home==='KIA';
+        const opp=isHome?todayKia.away:todayKia.home;
+        const isLive=todayKia.status==='LIVE', isFinal=todayKia.status==='FINAL';
+        const scoreStr = (isLive||isFinal)
+          ? `<span style="font-size:13px;font-weight:900;color:#fff">${isHome?(todayKia.homeScore??0):(todayKia.awayScore??0)} : ${isHome?(todayKia.awayScore??0):(todayKia.homeScore??0)}</span>`
+          : `<span style="font-size:11px;color:rgba(255,255,255,0.85)">${todayKia.time} 시작</span>`;
+        const badge = isLive?'<span style="font-size:9px;background:#ff3b3b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">LIVE</span>'
+          : isFinal?'<span style="font-size:9px;background:rgba(255,255,255,0.2);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">종료</span>':'';
+        return `<div onclick="setTab('cal');selDate('${todayStr}')" style="margin:0 16px 12px;background:linear-gradient(135deg,#E31837,#c0102a);border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;gap:10px">
+          <img src="${T['KIA'].img}" style="width:28px;height:28px;object-fit:contain"/>
+          <div style="flex:1">
+            <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:700">${badge}오늘 KIA · ${isHome?'홈':'원정'}</div>
+            <div style="font-size:12px;font-weight:800;color:#fff">vs ${T[opp]?.name||opp}</div>
+          </div>
+          ${scoreStr}
+          <img src="${T[opp]?.img||''}" style="width:28px;height:28px;object-fit:contain"/>
+        </div>`;
+      })()}
     </div>`;
 }
 
 function renderNav() {
-  const tabs=[{id:'cal',icon:'📅',label:'일정'},{id:'stand',icon:'🏆',label:'순위'},{id:'lead',icon:'⭐',label:'주목'}];
+  const tabs=[{id:'cal',icon:'📅',label:'일정'},{id:'stand',icon:'🏆',label:'순위'},{id:'lead',icon:'⭐',label:'주목'},{id:'memo',icon:'📝',label:'메모'},{id:'fav',icon:'⭐',label:'즐겨찾기'}];
   document.getElementById('nav').innerHTML = tabs.map(t =>
     `<button class="${state.tab===t.id?'active':''}" onclick="setTab('${t.id}')">
       <span class="icon">${t.icon}</span><span>${t.label}</span>
@@ -793,6 +829,8 @@ function renderContent(d) {
   const el=document.getElementById('content');
   if(state.tab==='cal') el.innerHTML=renderCal(d);
   else if(state.tab==='stand') el.innerHTML=renderStand(d);
+  else if(state.tab==='memo') el.innerHTML=renderMemos(d);
+  else if(state.tab==='fav') el.innerHTML=renderFavs(d);
   else el.innerHTML=renderLead(d);
 }
 
@@ -848,6 +886,7 @@ function renderCal(d) {
       return `<div class="card${isKia?' kia':''}" onclick="openModal(${i},'${sel}')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:5px">
+            <button onclick="event.stopPropagation();toggleFav(g)" style="font-size:16px;line-height:1;padding:0 2px">${isFav(g)?'⭐':'☆'}</button>
             ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;animation:fadeIn 0.5s infinite alternate">🔴 LIVE</span>`:
               isFinal?`<span style="font-size:9px;background:rgba(0,0,0,0.25);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">종료</span>`:
               `<span style="font-size:11px;font-weight:700;color:#FFB300">${g.time} 시작</span>`}
@@ -876,6 +915,29 @@ function renderCal(d) {
       </div>`;
     }).join('');
   }
+  // 다음 KIA 경기 카운트다운
+  const kstNow2 = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
+  const todayStr2 = kstNow2.getFullYear()+'-'+String(kstNow2.getMonth()+1).padStart(2,'0')+'-'+String(kstNow2.getDate()).padStart(2,'0');
+  const nextKia = SCH.find(g=>g.date>=todayStr2&&(g.away==='KIA'||g.home==='KIA')&&g.status!=='FINAL');
+  let countdownHtml = '';
+  if(nextKia && nextKia.date > todayStr2) {
+    const [ny,nm,nd] = nextKia.date.split('-').map(Number);
+    const nextD = new Date(ny,nm-1,nd);
+    const nowD = new Date(kstNow2.getFullYear(),kstNow2.getMonth(),kstNow2.getDate());
+    const diffDays = Math.round((nextD-nowD)/(1000*60*60*24));
+    const opp2 = nextKia.home==='KIA'?nextKia.away:nextKia.home;
+    const isHome2 = nextKia.home==='KIA';
+    countdownHtml = `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+      <div style="font-size:22px">⏱️</div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:${d.sub};font-weight:700">다음 KIA 경기</div>
+        <div style="font-size:13px;font-weight:900;color:${d.text}">vs ${T[opp2]?.name||opp2} <span style="color:#E31837">${diffDays}일 후</span></div>
+        <div style="font-size:10px;color:${d.sub}">${nextKia.date} · ${nextKia.time} · ${isHome2?'홈':'원정'}</div>
+      </div>
+      ${logo(opp2,32)}
+    </div>`;
+  }
+
   return `
     ${(()=>{
       const dday = getDday();
@@ -895,6 +957,7 @@ function renderCal(d) {
         </div>
       </div>`;
     })()}
+    ${countdownHtml}
     <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">
       <button onclick="prevMo()" style="color:#E31837;font-size:22px;padding:4px 10px;line-height:1">‹</button>
       <div style="font-size:17px;font-weight:900;min-width:110px;text-align:center;color:${d.text}">${yr}년 ${mo}월</div>
@@ -911,6 +974,92 @@ function renderCal(d) {
       <span style="font-size:11px;color:${d.sub}">· ${selGs.length>0?selGs.length+'경기':'경기 없음'}</span>
     </div>
     ${gameList}`;
+}
+
+
+function renderMemos(d) {
+  // localStorage에서 메모 전체 읽기
+  const memos = [];
+  for(let i=0;i<localStorage.length;i++) {
+    const k=localStorage.key(i);
+    if(k&&k.startsWith('m_')) {
+      const val=localStorage.getItem(k);
+      if(val&&val.trim()) {
+        // m_YYYY-MM-DD_AWAY_HOME
+        const parts=k.substring(2).split('_');
+        const date=parts[0], away=parts[1], home=parts[2];
+        const g=SCH.find(s=>s.date===date&&s.away===away&&s.home===home);
+        memos.push({date,away,home,memo:val,g});
+      }
+    }
+  }
+  memos.sort((a,b)=>b.date.localeCompare(a.date));
+
+  if(!memos.length) return `
+    <div style="text-align:center;padding:60px 20px">
+      <div style="font-size:40px;margin-bottom:12px">📝</div>
+      <div style="font-size:15px;font-weight:700;color:${d.text}">메모가 없어요</div>
+      <div style="font-size:12px;color:${d.sub};margin-top:6px">경기 팝업에서 메모를 남겨보세요</div>
+    </div>`;
+
+  return `
+    <div style="font-size:12px;font-weight:700;color:${d.sub};margin-bottom:12px">총 ${memos.length}개의 메모</div>
+    ${memos.map(m=>`
+      <div class="card${m.away==='KIA'||m.home==='KIA'?' kia':''}" onclick="if(m.g){state.sel='${m.date}';setTab('cal');setTimeout(()=>{const idx=SCH.filter(g=>g.date==='${m.date}').findIndex(g=>g.away==='${m.away}'&&g.home==='${m.home}');openModal(idx,'${m.date}');},100)}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          ${logo(m.away,20)}
+          <span style="font-size:11px;font-weight:700;color:${d.sub}">${m.away} vs ${m.home}</span>
+          ${logo(m.home,20)}
+          <span style="font-size:10px;color:${d.sub};margin-left:auto">${m.date}</span>
+        </div>
+        <div style="font-size:13px;color:${d.text};line-height:1.6;white-space:pre-wrap">${m.memo}</div>
+      </div>`).join('')}`;
+}
+
+function renderFavs(d) {
+  const favGames = SCH.filter(g=>isFav(g));
+  favGames.sort((a,b)=>a.date.localeCompare(b.date));
+
+  if(!favGames.length) return `
+    <div style="text-align:center;padding:60px 20px">
+      <div style="font-size:40px;margin-bottom:12px">⭐</div>
+      <div style="font-size:15px;font-weight:700;color:${d.text}">즐겨찾기가 없어요</div>
+      <div style="font-size:12px;color:${d.sub};margin-top:6px">경기 카드의 ☆를 눌러 추가해보세요</div>
+    </div>`;
+
+  return `
+    <div style="font-size:12px;font-weight:700;color:${d.sub};margin-bottom:12px">⭐ ${favGames.length}개의 즐겨찾기</div>
+    ${favGames.map((g,i)=>{
+      const isKia=g.away==='KIA'||g.home==='KIA';
+      const kiaHome=g.home==='KIA';
+      const lKey=isKia&&kiaHome?g.home:g.away;
+      const rKey=isKia&&kiaHome?g.away:g.home;
+      const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
+      const scoreHtml=(isLive||isFinal)
+        ?`<div style="font-size:16px;font-weight:900;color:${d.text}">${kiaHome?(g.homeScore??0):(g.awayScore??0)} : ${kiaHome?(g.awayScore??0):(g.homeScore??0)}</div>`
+        :`<div style="font-size:11px;font-weight:700;color:#FFB300">${g.time}</div>`;
+      return `<div class="card${isKia?' kia':''}" onclick="state.sel='${g.date}';setTab('cal');setTimeout(()=>{const dayGs=SCH.filter(s=>s.date==='${g.date}');const sorted=[...dayGs.filter(s=>s.away==='KIA'||s.home==='KIA'),...dayGs.filter(s=>s.away!=='KIA'&&s.home!=='KIA')];const idx=sorted.findIndex(s=>s.away==='${g.away}'&&s.home==='${g.home}');openModal(idx,'${g.date}');},100)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:10px;color:${d.sub}">${g.date}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">LIVE</span>`:''}
+            ${isFinal?`<span style="font-size:9px;background:rgba(0,0,0,0.2);color:${d.text};border-radius:4px;padding:1px 5px;font-weight:700">종료</span>`:''}
+            <button onclick="event.stopPropagation();toggleFav(g)" style="font-size:16px">⭐</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:6px;flex:1">
+            ${logo(lKey,30)}
+            <span style="font-size:12px;font-weight:700;color:${lKey==='KIA'?'#ff6b6b':d.text}">${T[lKey]?.name||lKey}</span>
+          </div>
+          <div style="padding:0 8px">${scoreHtml}</div>
+          <div style="display:flex;align-items:center;gap:6px;flex:1;flex-direction:row-reverse">
+            ${logo(rKey,30)}
+            <span style="font-size:12px;font-weight:700;color:${rKey==='KIA'?'#ff6b6b':d.text};text-align:right">${T[rKey]?.name||rKey}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}`;
 }
 
 function renderStand(d) {
@@ -930,7 +1079,27 @@ function renderStand(d) {
             ${logo(row.s,24)}
             <span style="font-size:13px;font-weight:${row.s==='KIA'?800:600};color:${row.s==='KIA'?'#ff7070':d.text}">${row.name}</span>
           </div>
-          <span style="text-align:center;font-size:10px;color:${d.sub}">${row.note}</span>
+          <div style="text-align:right">
+            ${(()=>{
+              const teamGames=SCH.filter(g=>(g.away===row.s||g.home===row.s)&&g.status==='FINAL');
+              if(!teamGames.length) return `<span style="font-size:10px;color:${d.sub}">${row.note}</span>`;
+              // 최근 결과로 스트릭 계산
+              const recent=[...teamGames].sort((a,b)=>b.date.localeCompare(a.date));
+              let streak=0, streakType='';
+              for(const g of recent) {
+                const isHome=g.home===row.s;
+                const teamScore=isHome?g.homeScore:g.awayScore;
+                const oppScore=isHome?g.awayScore:g.homeScore;
+                const result=teamScore>oppScore?'W':'L';
+                if(!streakType){streakType=result;streak=1;}
+                else if(result===streakType) streak++;
+                else break;
+              }
+              const color=streakType==='W'?'#E31837':'#4FC3F7';
+              const icon=streakType==='W'?'🔥':'💧';
+              return streak>=2?`<span style="font-size:10px;font-weight:700;color:${color}">${icon}${streak}연${streakType==='W'?'승':'패'}</span>`:`<span style="font-size:10px;color:${d.sub}">${row.note}</span>`;
+            })()}
+          </div>
         </div>`).join('')}
     </div>
     <div style="font-size:10px;color:${d.muted};text-align:right;margin-top:6px">* 2025 정규시즌 최종 순위 기준</div>`;
@@ -1013,7 +1182,10 @@ function renderModal(d) {
           ${isFinal?`<span style="font-size:10px;background:rgba(0,0,0,0.25);color:#fff;border-radius:4px;padding:1px 6px;font-weight:700">경기종료</span>`:''}
           <span style="font-size:11px;font-weight:700;color:#FFB300">${g.time} · 📍${g.stad}</span>
         </div>
-        <button onclick="closeModal()" style="background:${d.bg};color:${d.sub};border-radius:50%;width:28px;height:28px;font-size:16px;display:flex;align-items:center;justify-content:center">✕</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="toggleFav(g)" style="font-size:20px;line-height:1">${isFav(g)?'⭐':'☆'}</button>
+          <button onclick="closeModal()" style="background:${d.bg};color:${d.sub};border-radius:50%;width:28px;height:28px;font-size:16px;display:flex;align-items:center;justify-content:center">✕</button>
+        </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:10px;flex:1">
@@ -1048,6 +1220,26 @@ function renderModal(d) {
         </div>
         <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
       </div>
+      ${isFinal&&(g.winPitcher||g.losePitcher)?`<div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+          <span style="font-size:15px">⚾</span>
+          <span style="font-size:13px;font-weight:800;color:${d.text}">투수</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${g.winPitcher?`<div style="background:rgba(0,200,100,0.08);border:1px solid rgba(0,200,100,0.25);border-radius:12px;padding:12px">
+            <div style="font-size:9px;font-weight:700;color:#00C864;margin-bottom:4px">
+              <span style="background:rgba(0,200,100,0.15);border-radius:4px;padding:1px 6px">승</span> 승리투수
+            </div>
+            <div style="font-size:14px;font-weight:800;color:${d.text}">${g.winPitcher}</div>
+          </div>`:''}
+          ${g.losePitcher?`<div style="background:rgba(227,24,55,0.06);border:1px solid rgba(227,24,55,0.2);border-radius:12px;padding:12px">
+            <div style="font-size:9px;font-weight:700;color:#E31837;margin-bottom:4px">
+              <span style="background:rgba(227,24,55,0.12);border-radius:4px;padding:1px 6px">패</span> 패전투수
+            </div>
+            <div style="font-size:14px;font-weight:800;color:${d.text}">${g.losePitcher}</div>
+          </div>`:''}
+        </div>
+      </div>`:''}
       <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
@@ -1140,8 +1332,70 @@ window.addEventListener('popstate',()=>{if(state.modalGame)closeModal();});
 
 setInterval(()=>{state.clock=new Date();render();},1000);
 
+
+// ── 실시간 스코어 (MLB Stats API - KBO sportId=6) ──
+async function fetchTodayScores() {
+  const now = new Date();
+  const kst = new Date(now.toLocaleString('en-US', {timeZone:'Asia/Seoul'}));
+  const pad = n => String(n).padStart(2,'0');
+  const yyyy = kst.getFullYear();
+  const mm = pad(kst.getMonth()+1);
+  const dd = pad(kst.getDate());
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+
+  const TEAM = {
+    'KIA Tigers':'KIA','KT Wiz':'KT','LG Twins':'LG','SSG Landers':'SSG','NC Dinos':'NC',
+    'Doosan Bears':'두산','Lotte Giants':'롯데','Samsung Lions':'삼성','Hanwha Eagles':'한화','Kiwoom Heroes':'키움',
+  };
+  const mapTeam = n => {
+    if(!n) return n;
+    for(const [k,v] of Object.entries(TEAM)) if(n.includes(k)) return v;
+    return n;
+  };
+
+  try {
+    const url = `/api/kboScores`;
+    const r = await fetch(url);
+    if(!r.ok) return;
+    const data = await r.json();
+    const games = data?.games || [];
+    if(!games.length) return;
+
+    let updated = false;
+    games.forEach(g => {
+      const idx = SCH.findIndex(s => s.date===g.date && s.away===g.away && s.home===g.home);
+      if(idx !== -1) {
+        if(g.status) SCH[idx].status = g.status;
+        if(g.awayScore != null) SCH[idx].awayScore = g.awayScore;
+        if(g.homeScore != null) SCH[idx].homeScore = g.homeScore;
+        if(g.awayInnings?.some(x=>x>=0)) SCH[idx].awayInnings = g.awayInnings;
+        if(g.homeInnings?.some(x=>x>=0)) SCH[idx].homeInnings = g.homeInnings;
+        if(g.inning) SCH[idx].inning = g.inning;
+        if(g.winPitcher) SCH[idx].winPitcher = g.winPitcher;
+        if(g.losePitcher) SCH[idx].losePitcher = g.losePitcher;
+        updated = true;
+      }
+    });
+
+    // 열려있는 모달도 갱신
+    if(updated) {
+      const kstDate = `${yyyy}-${mm}-${dd}`;
+      if(state.sel === kstDate) render();
+      if(state.modalGame) {
+        const mg = SCH.find(s => s.date===state.modalGame.date && s.away===state.modalGame.away && s.home===state.modalGame.home);
+        if(mg) { state.modalGame = mg; renderModal(D()); }
+      }
+    }
+  } catch(e) {
+    console.log('스코어 갱신 실패:', e.message);
+  }
+}
+
+// 30초마다 갱신
+fetchTodayScores();
+setInterval(fetchTodayScores, 30000);
+
 render();
 </script>
 </body>
 </html>
-
