@@ -1220,6 +1220,28 @@ function renderModal(d) {
         </div>
         <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
       </div>
+      ${(g.awayStarter||g.homeStarter)?`<div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+          <span style="font-size:15px">🎯</span>
+          <span style="font-size:13px;font-weight:800;color:${d.text}">선발투수</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              ${logo(g.away,18)}
+              <span style="font-size:10px;font-weight:700;color:${d.sub}">${g.away}</span>
+            </div>
+            <div style="font-size:14px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
+          </div>
+          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              ${logo(g.home,18)}
+              <span style="font-size:10px;font-weight:700;color:${d.sub}">${g.home}</span>
+            </div>
+            <div style="font-size:14px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
+          </div>
+        </div>
+      </div>`:''}`
       ${isFinal&&(g.winPitcher||g.losePitcher)?`<div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
           <span style="font-size:15px">⚾</span>
@@ -1373,6 +1395,8 @@ async function fetchTodayScores() {
         if(g.inning) SCH[idx].inning = g.inning;
         if(g.winPitcher) SCH[idx].winPitcher = g.winPitcher;
         if(g.losePitcher) SCH[idx].losePitcher = g.losePitcher;
+        if(g.awayStarter) SCH[idx].awayStarter = g.awayStarter;
+        if(g.homeStarter) SCH[idx].homeStarter = g.homeStarter;
         updated = true;
       }
     });
