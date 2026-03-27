@@ -885,33 +885,18 @@ function renderCal(d) {
     }).join('');
   }
 
-function getDDay(targetDate) {
-  const now = new Date();
-  const target = new Date(targetDate);
-  const diff = target - now;
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-}
-
-const dday = getDDay("2026-03-28");
-
-return `
-  ${yr===2026&&mo===3?`<div style="background:linear-gradient(135deg,rgba(227,24,55,0.15),rgba(255,179,0,0.1));border:1px solid rgba(227,24,55,0.3);border-radius:12px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
-    <span style="font-size:20px">⚾</span>
-    <div style="flex:1">
-      <div style="font-size:13px;font-weight:900;color:${d.text}">
-        2026 KBO 개막까지 
-        <span style="color:#E31837">D-${dday}</span>
+  return `
+    ${yr===2026&&mo===3?`<div style="background:linear-gradient(135deg,rgba(227,24,55,0.15),rgba(255,179,0,0.1));border:1px solid rgba(227,24,55,0.3);border-radius:12px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">⚾</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:900;color:${d.text}">2026 KBO 개막까지 <span style="color:#E31837">D-1</span></div>
+        <div style="font-size:11px;color:${d.sub}">3/28(토) · 인천 SSG랜더스필드 · 14:00</div>
       </div>
-      <div style="font-size:11px;color:${d.sub}">
-        3/28(토) · 인천 SSG랜더스필드 · 14:00
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#FFB300;font-weight:700">KIA 원정개막</div>
+        <div style="font-size:11px;color:${d.sub}">🐯 vs 🚀</div>
       </div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:11px;color:#FFB300;font-weight:700">KIA 원정개막</div>
-      <div style="font-size:11px;color:${d.sub}">🐯 vs 🚀</div>
-    </div>
-  </div>`:''}
-`;
+    </div>`:''}
     <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">
       <button onclick="prevMo()" style="color:#E31837;font-size:22px;padding:4px 10px;line-height:1">‹</button>
       <div style="font-size:17px;font-weight:900;min-width:110px;text-align:center;color:${d.text}">${yr}년 ${mo}월</div>
