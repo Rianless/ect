@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   const mm2 = pad(tmr.getUTCMonth() + 1);
   const dd2 = pad(tmr.getUTCDate());
 
-  const todayDash = "2026-03-28";
+  const todayDash = "2025-06-15";
   const tmrDash = `${yyyy2}-${mm2}-${dd2}`;
 
   const TEAM_MAP = {
