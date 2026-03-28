@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // KST 기준 날짜
+  // KST 기준 오늘/내일 날짜
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const pad = n => String(n).padStart(2, '0');
@@ -9,106 +9,122 @@ export default async function handler(req, res) {
   const mm = pad(kst.getUTCMonth() + 1);
   const dd = pad(kst.getUTCDate());
 
-  // 내일 날짜
   const tmr = new Date(kst.getTime() + 24 * 60 * 60 * 1000);
   const yyyy2 = tmr.getUTCFullYear();
   const mm2 = pad(tmr.getUTCMonth() + 1);
   const dd2 = pad(tmr.getUTCDate());
 
-  const todayDash = "2025-06-15";
-  const tmrDash = `${yyyy2}-${mm2}-${dd2}`;
+  const todayStr = `${yyyy}${mm}${dd}`;
+  const tmrStr   = `${yyyy2}${mm2}${dd2}`;
+  const todayDash = `${yyyy}-${mm}-${dd}`;
+  const tmrDash   = `${yyyy2}-${mm2}-${dd2}`;
 
   const TEAM_MAP = {
-    'KIA Tigers':'KIA','KT Wiz':'KT','LG Twins':'LG','SSG Landers':'SSG','NC Dinos':'NC',
-    'Doosan Bears':'두산','Lotte Giants':'롯데','Samsung Lions':'삼성','Hanwha Eagles':'한화','Kiwoom Heroes':'키움',
+    'KIA':'KIA','KT':'KT','LG':'LG','SSG':'SSG','NC':'NC',
+    '두산':'두산','롯데':'롯데','삼성':'삼성','한화':'한화','키움':'키움',
+    'KIA 타이거즈':'KIA','KT 위즈':'KT','LG 트윈스':'LG','SSG 랜더스':'SSG','NC 다이노스':'NC',
+    '두산 베어스':'두산','롯데 자이언츠':'롯데','삼성 라이온즈':'삼성','한화 이글스':'한화','키움 히어로즈':'키움',
   };
-  const mapTeam = n => {
-    if(!n) return n;
-    for(const [k,v] of Object.entries(TEAM_MAP)) if(n.includes(k)) return v;
-    return n;
+  const mapTeam = n => TEAM_MAP[n] || n;
+
+  const STATUS_MAP = {
+    '경기전':'SCHEDULED', '경기중':'LIVE', '종료':'FINAL',
+    'BEFORE_GAME':'SCHEDULED', 'CANCEL':'CANCEL',
   };
 
-  const parseGames = (gamesRaw, dateStr) => gamesRaw.map(g => {
-    const away = g.teams?.away;
-    const home = g.teams?.home;
-    const ls = g.linescore || {};
-    const bs = g.boxscore || {};
+  async function fetchNaver(dateStr8, dateDash) {
+    // 네이버 스포츠 KBO 일정 API
+    const url = `https://sports.news.naver.com/kbaseball/schedule/index.nhn?date=${dateStr8}`;
+    const apiUrl = `https://api-gw.sports.naver.com/schedule/games?category=kbo&fields=basic,stadium&gameDate=${dateStr8}&roundCode=&size=10`;
 
-    let status = 'SCHEDULED';
-    const sc = g.status?.detailedState || '';
-    if(['In Progress','Live','Manager Challenge'].includes(sc)) status = 'LIVE';
-    else if(['Final','Game Over','Completed Early'].includes(sc)) status = 'FINAL';
-
-    // 이닝 스코어
-    const innings = ls.innings || [];
-    const awayInnings = Array(9).fill(-1);
-    const homeInnings = Array(9).fill(-1);
-    innings.forEach((inn,i) => {
-      if(i<9){ awayInnings[i]=inn.away?.runs??-1; homeInnings[i]=inn.home?.runs??-1; }
+    const r = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+        'Referer': 'https://sports.news.naver.com/',
+        'Accept': 'application/json',
+      }
     });
 
-    // 시간 KST 변환
-    let time = '';
-    if(g.gameDate) {
-      const d = new Date(g.gameDate);
-      time = d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'});
-    }
+    if (!r.ok) return [];
 
-    // 선발투수 (probablePitchers)
-    const awayStarter = g.teams?.away?.probablePitcher?.fullName || null;
-    const homeStarter = g.teams?.home?.probablePitcher?.fullName || null;
+    const data = await r.json();
+    const gameList = data?.result?.games || data?.games || [];
 
-    return {
-      date: dateStr,
-      time,
-      away: mapTeam(away?.team?.name||''),
-      home: mapTeam(home?.team?.name||''),
-      stad: g.venue?.name||'',
-      status,
-      awayScore: away?.score??null,
-      homeScore: home?.score??null,
-      awayInnings,
-      homeInnings,
-      inning: ls.currentInning||null,
-      winPitcher: g.decisions?.winner?.fullName||null,
-      losePitcher: g.decisions?.loser?.fullName||null,
-      awayStarter,
-      homeStarter,
-      gameId: String(g.gamePk||''),
-    };
-  });
+    return gameList.map(g => {
+      const away = mapTeam(g.awayTeamName || g.awayTeam || '');
+      const home = mapTeam(g.homeTeamName || g.homeTeam || '');
+
+      let status = 'SCHEDULED';
+      const rawStatus = g.gameStatus || g.status || '';
+      status = STATUS_MAP[rawStatus] || (rawStatus.includes('종료') ? 'FINAL' : rawStatus.includes('경기중') ? 'LIVE' : 'SCHEDULED');
+
+      // 이닝 스코어 파싱
+      const awayInnings = Array(9).fill(-1);
+      const homeInnings = Array(9).fill(-1);
+      if (g.innings) {
+        g.innings.forEach((inn, i) => {
+          if (i < 9) {
+            awayInnings[i] = inn.awayScore ?? inn.away ?? -1;
+            homeInnings[i] = inn.homeScore ?? inn.home ?? -1;
+          }
+        });
+      }
+
+      // 시작 시간
+      let time = g.gameTime || g.startTime || '';
+      if (time && time.length === 4) time = time.slice(0,2) + ':' + time.slice(2);
+
+      return {
+        date: dateDash,
+        time,
+        away,
+        home,
+        stad: g.stadium || g.stadiumName || '',
+        status,
+        awayScore: g.awayScore != null ? Number(g.awayScore) : null,
+        homeScore: g.homeScore != null ? Number(g.homeScore) : null,
+        awayInnings,
+        homeInnings,
+        inning: g.currentInning || g.inning || null,
+        winPitcher: g.winPitcher || null,
+        losePitcher: g.losePitcher || null,
+        awayStarter: g.awayStartPitcher || g.awayPitcher || null,
+        homeStarter: g.homeStartPitcher || g.homePitcher || null,
+        gameId: String(g.gameId || g.id || ''),
+      };
+    });
+  }
 
   try {
-    // 오늘 + 내일 동시 조회
-    const [r1, r2] = await Promise.all([
-      fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=6&date=${todayDash}&gameType=R&hydrate=linescore,decisions,probablePitchers`, {
-        headers:{'User-Agent':'Mozilla/5.0','Accept':'application/json'}
-      }),
-      fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=6&date=${tmrDash}&gameType=R&hydrate=linescore,decisions,probablePitchers`, {
-        headers:{'User-Agent':'Mozilla/5.0','Accept':'application/json'}
-      }),
+    const [todayGames, tmrGames] = await Promise.all([
+      fetchNaver(todayStr, todayDash),
+      fetchNaver(tmrStr, tmrDash),
     ]);
-
-    const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
-
-    const todayGames = parseGames((d1?.dates||[]).flatMap(d=>d.games||[]), todayDash);
-    const tmrGames = parseGames((d2?.dates||[]).flatMap(d=>d.games||[]), tmrDash);
 
     const allGames = [...todayGames, ...tmrGames];
 
-    if(!allGames.length) {
-      return res.status(200).json({ games:[], date:`${yyyy}${mm}${dd}`, note:'오늘 KBO 경기 없음', total:0 });
+    if (!allGames.length) {
+      return res.status(200).json({
+        games: [],
+        date: todayStr,
+        note: '오늘 KBO 경기 없음',
+        total: 0,
+      });
     }
 
     return res.status(200).json({
       games: allGames,
-      date: `${yyyy}${mm}${dd}`,
+      date: todayStr,
       today: todayGames.length,
       tomorrow: tmrGames.length,
       total: allGames.length,
     });
 
-  } catch(e) {
-    res.status(200).json({ games:[], date:`${yyyy}${mm}${dd}`, error: e.message });
+  } catch (e) {
+    return res.status(200).json({
+      games: [],
+      date: `${yyyy}${mm}${dd}`,
+      error: e.message,
+    });
   }
 }
