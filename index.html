@@ -1402,21 +1402,58 @@ function renderModal(d) {
   const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
 
   // 이닝 스코어 테이블
-  const inningHtml = (!isSch&&g.awayInnings&&g.homeInnings&&g.awayInnings.some(x=>x>=0)) ? `
-    <div style="overflow-x:auto">
-      <table class="inn-table">
-        <tr>
-          <td class="team-cell" style="color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</td>
-          ${(lTeam===g.away?g.awayInnings:g.homeInnings).map((s,i)=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
-          <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${lScore}</td>
-        </tr>
-        <tr>
-          <td class="team-cell" style="color:${rTeam==='KIA'?'#ff6b6b':d.text}">${T[rTeam]?.name||rTeam}</td>
-          ${(rTeam===g.away?g.awayInnings:g.homeInnings).map((s,i)=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
-          <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${rScore}</td>
-        </tr>
-      </table>
-    </div>` : `<div style="text-align:center;padding:16px;color:${d.sub};font-size:12px">${isLive?`${g.inning||''}이닝 진행 중`:'경기 예정 · 경기 후 스코어가 표시됩니다'}</div>`;
+  const inningHtml = (() => {
+    if (isSch) {
+      return `<div style="text-align:center;padding:16px;color:${d.sub};font-size:12px">경기 예정 · 경기 후 스코어가 표시됩니다</div>`;
+    }
+    if (g.awayInnings && g.awayInnings.some(x => x >= 0)) {
+      return `
+        <div style="overflow-x:auto">
+          <table class="inn-table">
+            <tr>
+              <td class="team-cell" style="color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</td>
+              ${(lTeam===g.away?g.awayInnings:g.homeInnings).map(s=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
+              <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${lScore}</td>
+            </tr>
+            <tr>
+              <td class="team-cell" style="color:${rTeam==='KIA'?'#ff6b6b':d.text}">${T[rTeam]?.name||rTeam}</td>
+              ${(rTeam===g.away?g.awayInnings:g.homeInnings).map(s=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
+              <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${rScore}</td>
+            </tr>
+          </table>
+        </div>`;
+    }
+    // 네이버 API: 이닝별 데이터 없음 → 스코어 + 현재이닝 + 현재투수 표시
+    const inningText = g.inningInfo || (g.inning ? `${g.inning}회` : '');
+    return `
+      <div style="padding:14px 10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;flex:1">
+            ${logo(lTeam,24)}<span style="font-size:13px;font-weight:800;color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</span>
+          </div>
+          <span style="font-size:28px;font-weight:900;color:${d.text};min-width:32px;text-align:center">${lScore}</span>
+          <div style="display:flex;flex-direction:column;align-items:center;padding:0 10px">
+            ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 6px;font-weight:700;margin-bottom:3px">LIVE</span>`:''}
+            <span style="font-size:11px;color:${d.sub};font-weight:700">${inningText}</span>
+          </div>
+          <span style="font-size:28px;font-weight:900;color:${d.text};min-width:32px;text-align:center">${rScore}</span>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;flex-direction:row-reverse">
+            ${logo(rTeam,24)}<span style="font-size:13px;font-weight:800;color:${rTeam==='KIA'?'#ff6b6b':d.text};text-align:right">${T[rTeam]?.name||rTeam}</span>
+          </div>
+        </div>
+        ${(g.awayPitcher||g.homePitcher)?`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid ${d.bgB};padding-top:10px">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.away} 현재 투수</div>
+            <div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayPitcher||'-'}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.home} 현재 투수</div>
+            <div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homePitcher||'-'}</div>
+          </div>
+        </div>`:''}
+      </div>`;
+  })();
 
   document.getElementById('modal-content').innerHTML = `
     <div style="display:flex;justify-content:center;padding:10px 0 2px">
@@ -1783,7 +1820,7 @@ async function fetchTodayScores() {
 
     let updated = false;
     games.forEach(g => {
-      const idx = SCH.findIndex(s => s.away===g.away && s.home===g.home);
+      const idx = SCH.findIndex(s => s.date===g.date && s.away===g.away && s.home===g.home);
       if(idx !== -1) {
         if(g.status) SCH[idx].status = g.status;
         if(g.awayScore != null) SCH[idx].awayScore = g.awayScore;
@@ -1813,27 +1850,11 @@ async function fetchTodayScores() {
   }
 }
 
+// 30초마다 갱신
+fetchTodayScores();
+setInterval(fetchTodayScores, 30000);
 
-// 1. 화면 초기 렌더링
 render();
-
-// 2. 30초 주기 실시간 업데이트 설정
-const startRealtimeUpdate = () => {
-    // 앱 시작 시 즉시 점수 가져오기
-    fetchTodayScores();
-
-    // 30초(30000ms)마다 반복 실행
-    setInterval(() => {
-        console.log("⚾ 실시간 스코어 업데이트 중 (30초 주기)...");
-        fetchTodayScores();
-    }, 30000); 
-};
-
-// 3. 페이지가 준비되면 실시간 업데이트 시작
-window.addEventListener('DOMContentLoaded', startRealtimeUpdate);
-
-  
 </script>
 </body>
 </html>
-
