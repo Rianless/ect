@@ -785,46 +785,51 @@ function render() {
 
 function renderHeader(d) {
   document.getElementById('header').innerHTML = `
-    <div style="background:${state.dark?'linear-gradient(180deg,#111827 0%,transparent 100%)':'linear-gradient(180deg,#fff 0%,transparent 100%)'};padding:18px 16px 12px">
-      <div style="max-width:600px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-start">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:24px">🐯</span>
-          <div>
-            <div style="font-size:19px;font-weight:900;color:${d.text}">KBO 대시보드</div>
-            <div style="font-size:10px;font-weight:700"><span style="color:#E31837">KIA 타이거즈</span><span style="color:${d.sub}"> · 2026 개막 ⚾</span></div>
+    <div style="background:${state.dark?'linear-gradient(180deg,#111827 0%,transparent 100%)':'linear-gradient(180deg,#fff 0%,transparent 100%)'};padding:18px 16px 14px">
+      <div style="max-width:600px;margin:0 auto">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:${state.tab==='cal'?'10px':'0'}">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:24px">🐯</span>
+            <div>
+              <div style="font-size:19px;font-weight:900;color:${d.text}">KBO 대시보드</div>
+              <div style="font-size:10px;font-weight:700"><span style="color:#E31837">KIA 타이거즈</span><span style="color:${d.sub}"> · 2026 개막 ⚾</span></div>
+            </div>
+          </div>
+          <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div style="font-size:15px;font-weight:700;color:${d.text}">${state.clock.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="font-size:10px;color:${d.sub}">${state.clock.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'})}</div>
+              <button onclick="toggleDark()" style="background:${state.dark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)'};border-radius:20px;padding:3px 8px;font-size:13px">${state.dark?'☀️':'🌙'}</button>
+            </div>
           </div>
         </div>
-        <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-          <div style="font-size:15px;font-weight:700;color:${d.text}">${state.clock.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <div style="font-size:10px;color:${d.sub}">${state.clock.toLocaleDateString('ko-KR',{month:'long',day:'numeric',weekday:'short'})}</div>
-            <button onclick="toggleDark()" style="background:${state.dark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)'};border-radius:20px;padding:3px 8px;font-size:13px">${state.dark?'☀️':'🌙'}</button>
-          </div>
-        </div>
+        ${(()=>{
+          if(state.tab !== 'cal') return '';
+          const kstNow = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
+          const todayStr = kstNow.getFullYear()+'-'+String(kstNow.getMonth()+1).padStart(2,'0')+'-'+String(kstNow.getDate()).padStart(2,'0');
+          const todayKia = SCH.find(g=>g.date===todayStr&&(g.away==='KIA'||g.home==='KIA'));
+          if(!todayKia) return '';
+          const isHome=todayKia.home==='KIA';
+          const opp=isHome?todayKia.away:todayKia.home;
+          const isLive=todayKia.status==='LIVE', isFinal=todayKia.status==='FINAL';
+          const kScore=isHome?(todayKia.homeScore??0):(todayKia.awayScore??0);
+          const oScore=isHome?(todayKia.awayScore??0):(todayKia.homeScore??0);
+          const badge = isLive?'<span style="font-size:9px;background:#ff3b3b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">LIVE</span>'
+            : isFinal?'<span style="font-size:9px;background:rgba(255,255,255,0.2);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">종료</span>':'';
+          return `<div onclick="selDate('${todayStr}')" style="background:linear-gradient(135deg,#E31837,#c0102a);border-radius:12px;padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:10px">
+            <img src="${T['KIA'].img}" style="width:36px;height:36px;object-fit:contain"/>
+            <div style="flex:1">
+              <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:700">${badge}오늘 KIA · ${isHome?'홈':'원정'}</div>
+              <div style="font-size:13px;font-weight:900;color:#fff">vs ${T[opp]?.name||opp}</div>
+            </div>
+            <div style="text-align:right">
+              ${(isLive||isFinal)?`<div style="font-size:16px;font-weight:900;color:#fff">${kScore} : ${oScore}</div>`:''}
+              <div style="font-size:11px;color:rgba(255,255,255,0.8)">${todayKia.time}</div>
+            </div>
+            <img src="${T[opp]?.img||''}" style="width:36px;height:36px;object-fit:contain"/>
+          </div>`;
+        })()}
       </div>
-      ${(()=>{
-        const kstNow = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
-        const todayStr = kstNow.getFullYear()+'-'+String(kstNow.getMonth()+1).padStart(2,'0')+'-'+String(kstNow.getDate()).padStart(2,'0');
-        const todayKia = SCH.find(g=>g.date===todayStr&&(g.away==='KIA'||g.home==='KIA'));
-        if(!todayKia) return '';
-        const isHome=todayKia.home==='KIA';
-        const opp=isHome?todayKia.away:todayKia.home;
-        const isLive=todayKia.status==='LIVE', isFinal=todayKia.status==='FINAL';
-        const scoreStr = (isLive||isFinal)
-          ? `<span style="font-size:13px;font-weight:900;color:#fff">${isHome?(todayKia.homeScore??0):(todayKia.awayScore??0)} : ${isHome?(todayKia.awayScore??0):(todayKia.homeScore??0)}</span>`
-          : `<span style="font-size:11px;color:rgba(255,255,255,0.85)">${todayKia.time} 시작</span>`;
-        const badge = isLive?'<span style="font-size:9px;background:#ff3b3b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">LIVE</span>'
-          : isFinal?'<span style="font-size:9px;background:rgba(255,255,255,0.2);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">종료</span>':'';
-        return `<div onclick="setTab('cal');selDate('${todayStr}')" style="margin:0 16px 12px;background:linear-gradient(135deg,#E31837,#c0102a);border-radius:12px;padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:10px">
-          <img src="${T['KIA'].img}" style="width:36px;height:36px;object-fit:contain"/>
-          <div style="flex:1">
-            <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:700">${badge}오늘 KIA · ${isHome?'홈':'원정'}</div>
-            <div style="font-size:13px;font-weight:900;color:#fff">vs ${T[opp]?.name||opp}</div>
-          </div>
-          ${scoreStr}
-          <img src="${T[opp]?.img||''}" style="width:36px;height:36px;object-fit:contain"/>
-        </div>`;
-      })()}
     </div>`;
 }
 
@@ -1799,7 +1804,7 @@ async function fetchTodayScores() {
     games.forEach(g => {
       const idx = SCH.findIndex(s => s.date===g.date && s.away===g.away && s.home===g.home);
       if(idx !== -1) {
-        if(g.status) SCH[idx].status = g.status;
+        if(g.status && !(SCH[idx].status==='FINAL' && g.status!=='FINAL')) SCH[idx].status = g.status;
         if(g.awayScore != null) SCH[idx].awayScore = g.awayScore;
         if(g.homeScore != null) SCH[idx].homeScore = g.homeScore;
         if(g.awayInnings?.some(x=>x>=0)) SCH[idx].awayInnings = g.awayInnings;
