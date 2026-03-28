@@ -1813,11 +1813,26 @@ async function fetchTodayScores() {
   }
 }
 
-// 30초마다 갱신
-fetchTodayScores();
-setInterval(fetchTodayScores, 30000);
 
+// 1. 화면 초기 렌더링
 render();
+
+// 2. 30초 주기 실시간 업데이트 설정
+const startRealtimeUpdate = () => {
+    // 앱 시작 시 즉시 점수 가져오기
+    fetchTodayScores();
+
+    // 30초(30000ms)마다 반복 실행
+    setInterval(() => {
+        console.log("⚾ 실시간 스코어 업데이트 중 (30초 주기)...");
+        fetchTodayScores();
+    }, 30000); 
+};
+
+// 3. 페이지가 준비되면 실시간 업데이트 시작
+window.addEventListener('DOMContentLoaded', startRealtimeUpdate);
+
+  
 </script>
 </body>
 </html>
