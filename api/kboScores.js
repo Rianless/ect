@@ -9,12 +9,9 @@ export default async function handler(req, res) {
   const dd = pad(kst.getUTCDate());
   const tmr = new Date(kst.getTime() + 24 * 60 * 60 * 1000);
   const yyyy2 = tmr.getUTCFullYear(), mm2 = pad(tmr.getUTCMonth() + 1), dd2 = pad(tmr.getUTCDate());
-  const yest = new Date(kst.getTime() - 24 * 60 * 60 * 1000);
-  const yyyy0 = yest.getUTCFullYear(), mm0 = pad(yest.getUTCMonth() + 1), dd0 = pad(yest.getUTCDate());
 
   const todayDash = `${yyyy}-${mm}-${dd}`;
   const tmrDash   = `${yyyy2}-${mm2}-${dd2}`;
-  const yesterDash= `${yyyy0}-${mm0}-${dd0}`;
   const todayStr  = `${yyyy}${mm}${dd}`;
 
   const TEAM_CODE = {
@@ -38,16 +35,50 @@ export default async function handler(req, res) {
     return (data?.result?.games || []).filter(g => g.categoryId === 'kbo');
   }
 
-  // 라인업: game-polling API (inning=1부터 시작)
-  async function fetchLineup(gameId, inning) {
+  // 라인업 전용 엔드포인트: /schedule/games/{gameId}/lineup
+  // 경기 중/종료 모두 동작
+  async function fetchLineup(gameId) {
+    // 1순위: lineup 전용 엔드포인트
+    const urls = [
+      `https://api-gw.sports.naver.com/schedule/games/${gameId}/lineup`,
+      `https://api-gw.sports.naver.com/game/${gameId}/lineup`,
+      `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=9&isHighlight=false`,
+    ];
+
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { headers: HEADERS });
+        if (!r.ok) continue;
+        const data = await r.json();
+        const result = data?.result;
+        if (!result) continue;
+
+        // homeLineup / awayLineup이 있으면 성공
+        if (result.homeLineup || result.awayLineup) return result;
+
+        // textRelayData 안에 homeLineup이 있는 경우 (game-polling 응답)
+        if (result.textRelayData?.homeLineup || result.textRelayData?.awayLineup) return result.textRelayData;
+
+        // game 필드 안에 있는 경우
+        if (result.game) {
+          // relatedGames의 첫 번째 게임에서 lineup 추출 시도
+        }
+      } catch { continue; }
+    }
+    return null;
+  }
+
+  // 경기 상세 (이닝스코어 + 라인업 모두 포함된 엔드포인트)
+  async function fetchGameDetail(gameId, inning) {
     const inn = inning || 1;
+    // game-polling은 특정 이닝의 textRelayData를 줌 → inning=1이면 전체 라인업 포함
     const url = `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`;
-    const r = await fetch(url, { headers: HEADERS });
-    if (!r.ok) return { error: `${r.status}`, url };
-    const data = await r.json();
-    const result = data?.result;
-    if (!result) return { error: 'no result', url };
-    return { data: result, url };
+    try {
+      const r = await fetch(url, { headers: HEADERS });
+      if (!r.ok) return null;
+      const data = await r.json();
+      return data?.result || null;
+    } catch { return null; }
   }
 
   function parseBatters(batters) {
@@ -87,7 +118,29 @@ export default async function handler(req, res) {
     }));
   }
 
-  function convertGame(g, lineupResult) {
+  function buildLineup(detail) {
+    if (!detail) return null;
+
+    // game-polling 응답 구조: result.textRelayData.homeLineup / awayLineup
+    const td = detail.textRelayData || detail;
+    const home = td.homeLineup || detail.homeLineup;
+    const away = td.awayLineup || detail.awayLineup;
+
+    if (!home && !away) return null;
+
+    return {
+      home: {
+        batters: parseBatters(home?.batter),
+        pitchers: parsePitchers(home?.pitcher),
+      },
+      away: {
+        batters: parseBatters(away?.batter),
+        pitchers: parsePitchers(away?.pitcher),
+      },
+    };
+  }
+
+  function convertGame(g, detail) {
     const away = mapTeam(g.awayTeamCode) || g.awayTeamName;
     const home = mapTeam(g.homeTeamCode) || g.homeTeamName;
     const sc = g.statusCode || '';
@@ -97,33 +150,20 @@ export default async function handler(req, res) {
     if (g.statusInfo) { const m = g.statusInfo.match(/(\d+)회/); if(m) inning=parseInt(m[1]); }
 
     let time = '';
-    if (g.gameDateTime) { const t=g.gameDateTime.split('T')[1]||''; const [h,mi]=t.split(':'); if(h&&mi) time=`${h}:${mi}`; }
+    if (g.gameDateTime) {
+      const t = g.gameDateTime.split('T')[1] || '';
+      const [h, mi] = t.split(':');
+      if (h && mi) time = `${h}:${mi}`;
+    }
 
-    const gameData = lineupResult?.data?.game || g;
+    const gameData = detail?.game || g;
     const awayInnRaw = gameData.awayTeamScoreByInning || g.awayTeamScoreByInning || [];
     const homeInnRaw = gameData.homeTeamScoreByInning || g.homeTeamScoreByInning || [];
 
     const awayInnings = Array(9).fill(-1);
     const homeInnings = Array(9).fill(-1);
-    awayInnRaw.forEach((s,i)=>{ if(i<9&&s!=='-') awayInnings[i]=Number(s); });
-    homeInnRaw.forEach((s,i)=>{ if(i<9&&s!=='-') homeInnings[i]=Number(s); });
-
-    let lineup = null;
-    if (lineupResult?.data) {
-      const d = lineupResult.data;
-      if (d.homeLineup || d.awayLineup) {
-        lineup = {
-          home: {
-            batters: parseBatters(d.homeLineup?.batter),
-            pitchers: parsePitchers(d.homeLineup?.pitcher),
-          },
-          away: {
-            batters: parseBatters(d.awayLineup?.batter),
-            pitchers: parsePitchers(d.awayLineup?.pitcher),
-          },
-        };
-      }
-    }
+    awayInnRaw.forEach((s,i)=>{ if(i<9 && s!=='-') awayInnings[i]=Number(s); });
+    homeInnRaw.forEach((s,i)=>{ if(i<9 && s!=='-') homeInnings[i]=Number(s); });
 
     return {
       date: g.gameDate || '',
@@ -145,43 +185,38 @@ export default async function handler(req, res) {
       awayPitcher: gameData.awayCurrentPitcherName || g.awayCurrentPitcherName || null,
       homePitcher: gameData.homeCurrentPitcherName || g.homeCurrentPitcherName || null,
       broadChannel: g.broadChannel || null,
-      lineup,
-      lineupError: lineupResult?.error || null, // 디버그용
+      lineup: buildLineup(detail),
       gameId: String(g.gameId || ''),
     };
   }
 
   try {
-    // 어제 경기가 오늘 날짜로 잡히는 경우 있어서 어제~내일 범위로 조회
-    const kstHour = kst.getUTCHours();
-    const fromDate = kstHour < 6 ? yesterDash : todayDash; // 새벽 6시 전이면 어제 포함
-    const rawGames = await fetchSchedule(fromDate, tmrDash);
+    const rawGames = await fetchSchedule(todayDash, tmrDash);
 
-    // LIVE/FINAL 게임만 라인업 조회
+    // LIVE/FINAL 게임만 상세 조회
     const liveOrFinal = rawGames.filter(g => g.statusCode==='STARTED' || g.statusCode==='RESULT');
-    const lineupMap = {};
+    const detailMap = {};
+
     await Promise.all(
       liveOrFinal.map(async g => {
-        const inn = (() => {
-          if (!g.statusInfo) return 1;
+        // FINAL은 마지막 이닝(9회 혹은 연장), LIVE는 현재 이닝으로 조회
+        let inn = 9;
+        if (g.statusCode === 'STARTED' && g.statusInfo) {
           const m = g.statusInfo.match(/(\d+)회/);
-          return m ? parseInt(m[1]) : 1;
-        })();
-        lineupMap[g.gameId] = await fetchLineup(g.gameId, inn);
+          if (m) inn = parseInt(m[1]);
+        }
+        const detail = await fetchGameDetail(g.gameId, inn);
+        if (detail) detailMap[g.gameId] = detail;
       })
     );
 
-    const allGames = rawGames.map(g => convertGame(g, lineupMap[g.gameId] || null));
-
-    // 날짜별 분류
-    const todayGames     = allGames.filter(g => g.date === todayDash);
-    const tmrGames       = allGames.filter(g => g.date === tmrDash);
-    const yesterdayGames = allGames.filter(g => g.date === yesterDash);
+    const allGames = rawGames.map(g => convertGame(g, detailMap[g.gameId] || null));
+    const todayGames = allGames.filter(g => g.date === todayDash);
+    const tmrGames   = allGames.filter(g => g.date === tmrDash);
 
     return res.status(200).json({
       games: allGames,
       date: todayStr,
-      yesterday: yesterdayGames.length,
       today: todayGames.length,
       tomorrow: tmrGames.length,
       total: allGames.length,
