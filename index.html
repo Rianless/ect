@@ -1783,7 +1783,7 @@ async function fetchTodayScores() {
 
     let updated = false;
     games.forEach(g => {
-      const idx = SCH.findIndex(s => s.date===g.date && s.away===g.away && s.home===g.home);
+      const idx = SCH.findIndex(s => s.away===g.away && s.home===g.home);
       if(idx !== -1) {
         if(g.status) SCH[idx].status = g.status;
         if(g.awayScore != null) SCH[idx].awayScore = g.awayScore;
