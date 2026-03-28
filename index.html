@@ -1401,59 +1401,43 @@ function renderModal(d) {
   try{ memoData=JSON.parse(memoRaw); if(typeof memoData==='string') memoData={text:memoData}; }catch(e){ memoData={text:memoRaw}; }
   const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
 
-  // 이닝 스코어 테이블
-  const inningHtml = (() => {
-    if (isSch) {
-      return `<div style="text-align:center;padding:16px;color:${d.sub};font-size:12px">경기 예정 · 경기 후 스코어가 표시됩니다</div>`;
-    }
-    if (g.awayInnings && g.awayInnings.some(x => x >= 0)) {
-      return `
-        <div style="overflow-x:auto">
-          <table class="inn-table">
-            <tr>
-              <td class="team-cell" style="color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</td>
-              ${(lTeam===g.away?g.awayInnings:g.homeInnings).map(s=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
-              <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${lScore}</td>
-            </tr>
-            <tr>
-              <td class="team-cell" style="color:${rTeam==='KIA'?'#ff6b6b':d.text}">${T[rTeam]?.name||rTeam}</td>
-              ${(rTeam===g.away?g.awayInnings:g.homeInnings).map(s=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
-              <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${rScore}</td>
-            </tr>
-          </table>
+  // 이닝 스코어
+  const lInn = lTeam===g.away ? g.awayInnings : g.homeInnings;
+  const rInn = rTeam===g.away ? g.awayInnings : g.homeInnings;
+  const hasInnData = !isSch && lInn && lInn.some(x=>x>=0);
+  const inningText = g.inningInfo || (g.inning ? `${g.inning}회` : '');
+
+  const inningHtml = isSch
+    ? `<div style="text-align:center;padding:16px;color:${d.sub};font-size:12px">경기 예정 · 경기 후 스코어가 표시됩니다</div>`
+    : hasInnData
+      ? `<div style="overflow-x:auto"><table class="inn-table">
+          <tr>
+            <td class="team-cell" style="color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</td>
+            ${lInn.map((s,i)=>`<td style="color:${d.text};${g.inning===i+1?'font-weight:900;color:#FFB300':''}">${s>=0?s:'·'}</td>`).join('')}
+            <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${lScore}</td>
+          </tr>
+          <tr>
+            <td class="team-cell" style="color:${rTeam==='KIA'?'#ff6b6b':d.text}">${T[rTeam]?.name||rTeam}</td>
+            ${rInn.map((s,i)=>`<td style="color:${d.text};${g.inning===i+1?'font-weight:900;color:#FFB300':''}">${s>=0?s:'·'}</td>`).join('')}
+            <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${rScore}</td>
+          </tr>
+        </table></div>`
+      : `<div style="padding:14px 10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:8px;flex:1">${logo(lTeam,22)}<span style="font-size:13px;font-weight:800;color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</span></div>
+            <span style="font-size:28px;font-weight:900;color:${d.text};min-width:28px;text-align:center">${lScore}</span>
+            <div style="display:flex;flex-direction:column;align-items:center;padding:0 10px">
+              ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 6px;font-weight:700;margin-bottom:3px">LIVE</span>`:''}
+              <span style="font-size:11px;color:${d.sub};font-weight:700">${inningText}</span>
+            </div>
+            <span style="font-size:28px;font-weight:900;color:${d.text};min-width:28px;text-align:center">${rScore}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex:1;flex-direction:row-reverse">${logo(rTeam,22)}<span style="font-size:13px;font-weight:800;color:${rTeam==='KIA'?'#ff6b6b':d.text};text-align:right">${T[rTeam]?.name||rTeam}</span></div>
+          </div>
+          ${(g.awayPitcher||g.homePitcher)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid ${d.bgB};padding-top:10px">
+            <div style="text-align:center"><div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.away} 현재 투수</div><div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayPitcher||'-'}</div></div>
+            <div style="text-align:center"><div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.home} 현재 투수</div><div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homePitcher||'-'}</div></div>
+          </div>`:''}
         </div>`;
-    }
-    // 네이버 API: 이닝별 데이터 없음 → 스코어 + 현재이닝 + 현재투수 표시
-    const inningText = g.inningInfo || (g.inning ? `${g.inning}회` : '');
-    return `
-      <div style="padding:14px 10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:8px;flex:1">
-            ${logo(lTeam,24)}<span style="font-size:13px;font-weight:800;color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</span>
-          </div>
-          <span style="font-size:28px;font-weight:900;color:${d.text};min-width:32px;text-align:center">${lScore}</span>
-          <div style="display:flex;flex-direction:column;align-items:center;padding:0 10px">
-            ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 6px;font-weight:700;margin-bottom:3px">LIVE</span>`:''}
-            <span style="font-size:11px;color:${d.sub};font-weight:700">${inningText}</span>
-          </div>
-          <span style="font-size:28px;font-weight:900;color:${d.text};min-width:32px;text-align:center">${rScore}</span>
-          <div style="display:flex;align-items:center;gap:8px;flex:1;flex-direction:row-reverse">
-            ${logo(rTeam,24)}<span style="font-size:13px;font-weight:800;color:${rTeam==='KIA'?'#ff6b6b':d.text};text-align:right">${T[rTeam]?.name||rTeam}</span>
-          </div>
-        </div>
-        ${(g.awayPitcher||g.homePitcher)?`
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid ${d.bgB};padding-top:10px">
-          <div style="text-align:center">
-            <div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.away} 현재 투수</div>
-            <div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayPitcher||'-'}</div>
-          </div>
-          <div style="text-align:center">
-            <div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.home} 현재 투수</div>
-            <div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homePitcher||'-'}</div>
-          </div>
-        </div>`:''}
-      </div>`;
-  })();
 
   document.getElementById('modal-content').innerHTML = `
     <div style="display:flex;justify-content:center;padding:10px 0 2px">
@@ -1534,28 +1518,51 @@ function renderModal(d) {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">🧢</span>
-            <span style="font-size:13px;font-weight:800;color:${d.text}">선발 라인업</span>
+            <span style="font-size:13px;font-weight:800;color:${d.text}">${(isLive||isFinal)?'라인업':'선발 라인업'}</span>
           </div>
-          ${hasLU?`<div style="display:flex;gap:4px">
+          ${g.lineup?`<div style="display:flex;gap:4px">
             <button onclick="setModalLt('away')" style="padding:4px 10px;background:${lt==='away'?aw.color:d.bg};border:1px solid ${lt==='away'?aw.color:d.bgB};border-radius:8px;color:${lt==='away'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.away}</button>
             <button onclick="setModalLt('home')" style="padding:4px 10px;background:${lt==='home'?hw.color:d.bg};border:1px solid ${lt==='home'?hw.color:d.bgB};border-radius:8px;color:${lt==='home'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.home}</button>
           </div>`:''}
         </div>
-        ${!hasLU?`<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
-          <div style="font-size:24px;margin-bottom:6px">📋</div>
-          <div style="font-size:13px;color:${d.sub}">라인업은 경기 당일 발표됩니다</div>
-        </div>`:
-        `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:12px 10px">
-          <div style="text-align:center;margin-bottom:4px;font-size:12px;font-weight:700;color:${ct.color}">${ct.name}</div>
-          ${renderDiamond(cur,ct.color,state.dark)}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:10px">
-            ${cur.map(p=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:7px;background:${d.bg};border:1px solid ${d.bgB}">
-              <span style="font-size:10px;font-weight:900;min-width:17px;text-align:center;color:${p.p==='P'?'#fff':ct.color};background:${p.p==='P'?ct.color+'cc':'transparent'};border-radius:3px;padding:${p.p==='P'?'1px 3px':'0'}">${p.n}</span>
-              <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1">${p.name}</span>
-              <span style="font-size:10px;color:${d.sub}">${p.p}</span>
-            </div>`).join('')}
-          </div>
-        </div>`}
+        ${(()=>{
+          const lu = g.lineup;
+          if (!lu) return `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
+            <div style="font-size:24px;margin-bottom:6px">📋</div>
+            <div style="font-size:13px;color:${d.sub}">라인업은 경기 당일 발표됩니다</div>
+          </div>`;
+          const side = lt === 'away' ? lu.away : lu.home;
+          const teamKey = lt === 'away' ? g.away : g.home;
+          const teamColor = (T[teamKey]||{}).color || '#888';
+          const batters = side.batters || [];
+          const pitchers = side.pitchers || [];
+          return `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;overflow:hidden">
+            ${batters.length ? `
+            <div style="padding:10px 12px 0">
+              <div style="font-size:10px;font-weight:700;color:${d.sub};margin-bottom:6px;letter-spacing:0.08em">타 순</div>
+              ${batters.map(p=>`
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid ${d.bgB}">
+                  <span style="font-size:11px;font-weight:900;color:${teamColor};min-width:14px;text-align:center">${p.order}</span>
+                  <span style="font-size:12px;color:${d.sub};min-width:36px;font-size:11px">${p.pos}</span>
+                  <span style="font-size:13px;font-weight:800;color:${teamKey==='KIA'?'#ff6b6b':d.text};flex:1">${p.name}${p.sub?`<span style="font-size:10px;color:${d.sub};font-weight:400"> ←${p.sub}</span>`:''}</span>
+                  <span style="font-size:10px;color:${d.sub}">${p.ab>0?`${p.hit}/${p.ab}`:'-'}</span>
+                  ${p.rbi>0?`<span style="font-size:10px;background:rgba(227,24,55,0.12);color:#E31837;border-radius:4px;padding:1px 5px;font-weight:700">${p.rbi}타점</span>`:''}
+                </div>`).join('')}
+            </div>` : ''}
+            ${pitchers.length ? `
+            <div style="padding:10px 12px">
+              <div style="font-size:10px;font-weight:700;color:${d.sub};margin-bottom:6px;letter-spacing:0.08em">투 수</div>
+              ${pitchers.map((p,i)=>`
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;${i<pitchers.length-1?`border-bottom:1px solid ${d.bgB}`:''}">
+                  <span style="font-size:10px;font-weight:700;color:${i===pitchers.length-1?teamColor:d.sub};min-width:14px;text-align:center">${p.seqno}</span>
+                  <span style="font-size:13px;font-weight:${i===pitchers.length-1?800:600};color:${i===pitchers.length-1?(teamKey==='KIA'?'#ff6b6b':d.text):d.sub};flex:1">${p.name}${i===pitchers.length-1?` <span style="font-size:9px;background:${teamColor};color:#fff;border-radius:3px;padding:1px 5px">현재</span>`:''}</span>
+                  <span style="font-size:10px;color:${d.sub}">${p.inn}이닝</span>
+                  <span style="font-size:10px;color:${p.er>0?'#E31837':d.sub}">${p.er}실점</span>
+                  <span style="font-size:10px;color:${d.sub}">${p.kk}K</span>
+                </div>`).join('')}
+            </div>` : ''}
+          </div>`;
+        })()}
       </div>
       <div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1828,10 +1835,14 @@ async function fetchTodayScores() {
         if(g.awayInnings?.some(x=>x>=0)) SCH[idx].awayInnings = g.awayInnings;
         if(g.homeInnings?.some(x=>x>=0)) SCH[idx].homeInnings = g.homeInnings;
         if(g.inning) SCH[idx].inning = g.inning;
+        if(g.inningInfo) SCH[idx].inningInfo = g.inningInfo;
         if(g.winPitcher) SCH[idx].winPitcher = g.winPitcher;
         if(g.losePitcher) SCH[idx].losePitcher = g.losePitcher;
         if(g.awayStarter) SCH[idx].awayStarter = g.awayStarter;
         if(g.homeStarter) SCH[idx].homeStarter = g.homeStarter;
+        if(g.awayPitcher) SCH[idx].awayPitcher = g.awayPitcher;
+        if(g.homePitcher) SCH[idx].homePitcher = g.homePitcher;
+        if(g.lineup) SCH[idx].lineup = g.lineup;
         updated = true;
       }
     });
