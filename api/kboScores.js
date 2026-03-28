@@ -13,149 +13,94 @@ export default async function handler(req, res) {
   const mm2 = pad(tmr.getUTCMonth() + 1);
   const dd2 = pad(tmr.getUTCDate());
 
-  const todayStr  = `${yyyy}${mm}${dd}`;
-  const tmrStr    = `${yyyy2}${mm2}${dd2}`;
   const todayDash = `${yyyy}-${mm}-${dd}`;
   const tmrDash   = `${yyyy2}-${mm2}-${dd2}`;
+  const todayStr  = `${yyyy}${mm}${dd}`;
 
-  const TEAM_MAP = {
-    'KIA 타이거즈':'KIA','KT 위즈':'KT','LG 트윈스':'LG','SSG 랜더스':'SSG',
-    'NC 다이노스':'NC','두산 베어스':'두산','롯데 자이언츠':'롯데',
-    '삼성 라이온즈':'삼성','한화 이글스':'한화','키움 히어로즈':'키움',
-    'KIA':'KIA','KT':'KT','LG':'LG','SSG':'SSG','NC':'NC',
-    '두산':'두산','롯데':'롯데','삼성':'삼성','한화':'한화','키움':'키움',
+  // 팀코드 → 짧은 이름
+  const TEAM_CODE = {
+    'HT':'KIA','KT':'KT','LG':'LG','SK':'SSG','NC':'NC',
+    'OB':'두산','LT':'롯데','SS':'삼성','HH':'한화','WO':'키움',
   };
-  const KBO_SHORT = ['KIA','KT','LG','SSG','NC','두산','롯데','삼성','한화','키움'];
-  const mapTeam = n => {
-    if (!n) return n;
-    const t = n.trim();
-    if (TEAM_MAP[t]) return TEAM_MAP[t];
-    for (const [k, v] of Object.entries(TEAM_MAP)) if (t.includes(k)) return v;
-    return t;
-  };
-  const isKbo = n => KBO_SHORT.includes(mapTeam(n));
+  const mapTeam = code => TEAM_CODE[code] || code;
 
-  // ── 1순위: 다음 스포츠 ──
-  async function fetchDaum(dateStr8, dateDash) {
-    const url = `https://sports.daum.net/api/schedule/sports?type=kbo&date=${dateStr8}`;
+  async function fetchNaver(fromDate, toDate) {
+    const url = `https://api-gw.sports.naver.com/schedule/games?fields=basic%2Cschedule%2Cbaseball%2CmanualRelayUrl&upperCategoryId=kbaseball&fromDate=${fromDate}&toDate=${toDate}&size=500`;
     const r = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        'Referer': 'https://sports.daum.net/',
+        'Referer': 'https://m.sports.naver.com/',
         'Accept': 'application/json',
       }
     });
-    if (!r.ok) throw new Error(`Daum ${r.status}`);
+    if (!r.ok) throw new Error(`Naver API ${r.status}`);
     const data = await r.json();
-    const list = data?.scheduleList || data?.data || [];
-    if (!list.length) throw new Error('Daum empty');
+    const games = data?.result?.games || [];
 
-    return list
-      .filter(g => isKbo(g.homeName || g.homeTeam) || isKbo(g.awayName || g.awayTeam))
+    // KBO 리그만 필터 (categoryId === 'kbo')
+    return games
+      .filter(g => g.categoryId === 'kbo')
       .map(g => {
-        const away = mapTeam(g.awayName || g.awayTeam || g.visitTeamName || '');
-        const home = mapTeam(g.homeName || g.homeTeam || g.homeTeamName || '');
-        const sc = g.gameStatusCode || '';
-        const status = sc === 'BEFORE_GAME' ? 'SCHEDULED'
-          : sc === 'FINAL_GAME' ? 'FINAL'
-          : sc === 'IN_GAME' ? 'LIVE'
-          : 'SCHEDULED';
+        // reversedHomeAway=true → homeTeam이 실제론 원정, awayTeam이 실제론 홈
+        // 네이버 데이터에서 away=원정(왼쪽), home=홈(오른쪽) 기준으로 맞춤
+        const away = mapTeam(g.awayTeamCode) || g.awayTeamName;
+        const home = mapTeam(g.homeTeamCode) || g.homeTeamName;
 
-        const awayInnings = Array(9).fill(-1);
-        const homeInnings = Array(9).fill(-1);
-        (g.innings || []).forEach((inn, i) => {
-          if (i < 9) {
-            awayInnings[i] = inn.awayScore ?? inn.visitScore ?? -1;
-            homeInnings[i] = inn.homeScore ?? -1;
-          }
-        });
+        const sc = g.statusCode || '';
+        const status = sc === 'BEFORE'   ? 'SCHEDULED'
+                     : sc === 'STARTED'  ? 'LIVE'
+                     : sc === 'RESULT'   ? 'FINAL'
+                     : sc === 'CANCEL'   ? 'CANCEL'
+                     : 'SCHEDULED';
 
-        let time = g.gameTime || '';
-        if (/^\d{4}$/.test(time)) time = time.slice(0,2) + ':' + time.slice(2);
-        else if (/^\d{2}:\d{2}/.test(time)) time = time.slice(0,5);
+        // 이닝 정보 (statusInfo: "8회초" 같은 형태)
+        let inning = null;
+        if (g.statusInfo) {
+          const m = g.statusInfo.match(/(\d+)회/);
+          if (m) inning = parseInt(m[1]);
+        }
+
+        // 시작 시간 KST
+        let time = '';
+        if (g.gameDateTime) {
+          const d = new Date(g.gameDateTime);
+          time = d.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', timeZone:'Asia/Seoul'});
+        }
+
+        const gameDate = (g.gameDate || fromDate);
 
         return {
-          date: dateDash, time, away, home,
-          stad: g.stadiumName || g.stadium || '',
+          date: gameDate,
+          time,
+          away,
+          home,
+          stad: g.stadium || '',
           status,
-          awayScore: g.awayScore != null ? Number(g.awayScore) : (g.visitScore != null ? Number(g.visitScore) : null),
-          homeScore: g.homeScore != null ? Number(g.homeScore) : null,
-          awayInnings, homeInnings,
-          inning: g.currentInning || null,
-          winPitcher: g.winPitcher || null,
-          losePitcher: g.losePitcher || null,
-          awayStarter: g.awayStarterName || g.visitStarterName || null,
+          awayScore: g.awayTeamScore != null ? Number(g.awayTeamScore) : null,
+          homeScore: g.homeTeamScore != null ? Number(g.homeTeamScore) : null,
+          awayInnings: Array(9).fill(-1),
+          homeInnings: Array(9).fill(-1),
+          inning,
+          inningInfo: g.statusInfo || null,  // "8회초" 등 그대로 보존
+          winPitcher:  g.winPitcherName  || null,
+          losePitcher: g.losePitcherName || null,
+          awayStarter: g.awayStarterName || null,
           homeStarter: g.homeStarterName || null,
-          gameId: String(g.gameId || g.gameCode || ''),
+          awayPitcher: g.awayCurrentPitcherName || null,
+          homePitcher: g.homeCurrentPitcherName || null,
+          broadChannel: g.broadChannel || null,
+          gameId: String(g.gameId || ''),
         };
       });
-  }
-
-  // ── 2순위: KBO 공식 AJAX ──
-  async function fetchKbo(dateStr8, dateDash) {
-    const url = `https://www.koreabaseball.com/ws/Schedule/ScoreBoardList.aspx?leId=1&srId=0&seasonId=${dateStr8.slice(0,4)}&date=${dateStr8}`;
-    const r = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        'Referer': 'https://www.koreabaseball.com/',
-        'Accept': 'application/json, text/javascript, */*',
-        'X-Requested-With': 'XMLHttpRequest',
-      }
-    });
-    if (!r.ok) throw new Error(`KBO ${r.status}`);
-    const data = await r.json();
-    const list = data?.data || data?.gameList || [];
-    if (!list.length) throw new Error('KBO empty');
-
-    return list
-      .filter(g => isKbo(g.homeTeam) || isKbo(g.awayTeam) || isKbo(g.visitTeamName))
-      .map(g => {
-        const away = mapTeam(g.awayTeam || g.visitTeamName || '');
-        const home = mapTeam(g.homeTeam || g.homeTeamName || '');
-        const sc = String(g.gameStatusCd || '');
-        const status = sc === '0' ? 'SCHEDULED' : ['1','2','3'].includes(sc) ? 'LIVE' : sc === '4' ? 'FINAL' : 'SCHEDULED';
-
-        const awayInnings = Array(9).fill(-1);
-        const homeInnings = Array(9).fill(-1);
-        (g.scores || []).forEach((s, i) => {
-          if (i < 9) {
-            awayInnings[i] = s.visit ?? s.away ?? -1;
-            homeInnings[i] = s.home ?? -1;
-          }
-        });
-
-        let time = g.gameTime || '';
-        if (/^\d{4}$/.test(time)) time = time.slice(0,2) + ':' + time.slice(2);
-
-        return {
-          date: dateDash, time, away, home,
-          stad: g.grdNm || g.stadiumName || '',
-          status,
-          awayScore: g.visitScore != null ? Number(g.visitScore) : null,
-          homeScore: g.homeScore != null ? Number(g.homeScore) : null,
-          awayInnings, homeInnings,
-          inning: g.currentInning || null,
-          winPitcher: g.winPitcher || null,
-          losePitcher: g.losePitcher || null,
-          awayStarter: g.visitStartPitcher || null,
-          homeStarter: g.homeStartPitcher || null,
-          gameId: String(g.gmkey || g.gameId || ''),
-        };
-      });
-  }
-
-  async function fetchDate(dateStr8, dateDash) {
-    try { const g = await fetchDaum(dateStr8, dateDash); if (g.length) return g; } catch(e) { console.log('Daum:', e.message); }
-    try { const g = await fetchKbo(dateStr8, dateDash);  if (g.length) return g; } catch(e) { console.log('KBO:', e.message); }
-    return [];
   }
 
   try {
-    const [todayGames, tmrGames] = await Promise.all([
-      fetchDate(todayStr, todayDash),
-      fetchDate(tmrStr, tmrDash),
-    ]);
-    const allGames = [...todayGames, ...tmrGames];
+    // 오늘 + 내일 한 번에 요청 (fromDate ~ toDate)
+    const allGames = await fetchNaver(todayDash, tmrDash);
+
+    const todayGames = allGames.filter(g => g.date === todayDash);
+    const tmrGames   = allGames.filter(g => g.date === tmrDash);
+
     return res.status(200).json({
       games: allGames,
       date: todayStr,
@@ -164,7 +109,10 @@ export default async function handler(req, res) {
       total: allGames.length,
       note: allGames.length === 0 ? '오늘 KBO 경기 없음' : undefined,
     });
-  } catch(e) {
-    return res.status(200).json({ games:[], date:`${yyyy}${mm}${dd}`, error: e.message });
+
+  } catch (e) {
+    return res.status(200).json({
+      games: [], date: todayStr, error: e.message,
+    });
   }
 }
