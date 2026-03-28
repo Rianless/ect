@@ -3,5 +3,15 @@
     "api/*.js": {
       "maxDuration": 10
     }
-  }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }
+```
+
+### API 직접 테스트
+배포 후 브라우저에서 직접 접속해서 데이터가 오는지 확인:
+```
+https://[내 Vercel 도메인]/api/kboScores
