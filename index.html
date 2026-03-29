@@ -1045,7 +1045,6 @@ function renderCal(d) {
 }
 
 function renderBaseballRecord(d) {
-  // 최신순 정렬
   const kiaGames = SCH.filter(g =>
     g.status === 'FINAL' && (g.away === 'KIA' || g.home === 'KIA')
   ).sort((a,b) => b.date.localeCompare(a.date));
@@ -1067,82 +1066,106 @@ function renderBaseballRecord(d) {
     const oppScore = isHome ? g.awayScore : g.homeScore;
     const isWin = kiaScore > oppScore;
     const isDraw = kiaScore === oppScore;
-    const resultColor = isWin ? '#E31837' : isDraw ? '#FFB300' : '#3B9EF5';
-    const resultBg = isWin ? 'rgba(227,24,55,0.08)' : isDraw ? 'rgba(255,179,0,0.08)' : 'rgba(59,158,245,0.08)';
-    const resultLabel = isWin ? 'WIN 승리' : isDraw ? 'DRAW 무승부' : 'LOSE 패배';
+    // 결과 색상/라벨 (사진처럼)
+    const resultColor = isWin ? '#E31837' : isDraw ? '#FF9500' : '#3B9EF5';
+    const resultBg    = isWin ? 'rgba(227,24,55,0.06)' : isDraw ? 'rgba(255,149,0,0.06)' : 'rgba(59,158,245,0.06)';
+    const resultEn    = isWin ? 'WIN' : isDraw ? 'DRAW' : 'LOSE';
+    const resultKr    = isWin ? '승리' : isDraw ? '무승부' : '패배';
+
     const memoKey = 'm_'+g.date+'_'+g.away+'_'+g.home;
     let memoData = {};
     try { memoData = JSON.parse(localStorage.getItem(memoKey)||'{}'); if(typeof memoData==='string') memoData={text:memoData}; } catch(e) {}
     const [yr2,mo2,da2] = g.date.split('-');
     const dw2 = ['일','월','화','수','목','금','토'][new Date(g.date+'T12:00:00').getDay()];
 
-    // ── 티켓 컨테이너 (흰 배경 + 빨간 테두리) ──
-    html += '<div style="margin-bottom:18px;cursor:pointer;position:relative" onclick="openGameByKey(this)" data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'">';
+    // 팀명 짧게 (타이거즈 → 타이거즈)
+    const awayShort = T[g.away] ? T[g.away].name.replace(/^[^ ]+ /,'') : g.away;
+    const homeShort = T[g.home] ? T[g.home].name.replace(/^[^ ]+ /,'') : g.home;
 
-    // 티켓 상단 메인 영역
-    html += '<div style="background:'+d.card+';border:2.5px solid #E31837;border-radius:18px 18px 0 0;padding:16px 18px 14px;overflow:hidden">';
+    // 티켓 전체 래퍼
+    html += '<div style="margin-bottom:20px;cursor:pointer;border-radius:20px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.10);background:'+d.card+'" onclick="openGameByKey(this)" data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'">';
 
-    // 날짜 행 + 결과 배지
-    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">';
-    html += '<div><div style="font-size:16px;font-weight:900;color:'+d.text+'">'+yr2+'.'+mo2+'.'+da2+'</div>';
-    html += '<div style="font-size:11px;color:'+d.sub+';margin-top:2px">📍 '+g.stad+'</div></div>';
-    html += '<div style="background:'+resultBg+';border:1.5px solid '+resultColor+';border-radius:12px;padding:6px 14px;text-align:center">';
-    html += '<div style="font-size:13px;font-weight:900;color:'+resultColor+';white-space:pre-line">'+resultLabel+'</div>';
-    html += '</div></div>';
-
-    // 점선 구분
-    html += '<div style="border-top:1.5px dashed rgba(227,24,55,0.25);margin:0 -18px 14px"></div>';
-
-    // 팀 스코어 (세 번째 사진처럼: 로고 크게, 팀명, HOME/AWAY)
-    const leftTeam  = g.away;  // away 항상 왼쪽
-    const rightTeam = g.home;
-    const leftScore  = g.awayScore ?? 0;
-    const rightScore = g.homeScore ?? 0;
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px">';
-    // 왼쪽
-    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">';
-    html += logo(leftTeam, 52);
-    html += '<div style="font-size:12px;font-weight:700;color:'+(leftTeam==='KIA'?'#E31837':d.text)+'">'+( T[leftTeam]?T[leftTeam].name.split(' ').pop():leftTeam)+'</div>';
-    html += '<div style="font-size:10px;color:'+d.sub+'">AWAY</div>';
+    // ── 티켓 상단: 날짜 + 구장 + WIN/LOSE 배지 ──
+    html += '<div style="padding:18px 20px 16px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+    // 왼쪽: 날짜 + 구장
+    html += '<div>';
+    html += '<div style="font-size:20px;font-weight:900;color:'+d.text+';letter-spacing:-0.5px">'+yr2+'.'+mo2+'.'+da2+'</div>';
+    html += '<div style="display:flex;align-items:center;gap:4px;margin-top:4px">';
+    html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="'+resultColor+'"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>';
+    html += '<div style="font-size:12px;color:'+d.sub+'">'+g.stad+'</div>';
     html += '</div>';
-    // 스코어
-    html += '<div style="text-align:center;padding:0 10px">';
-    html += '<div style="font-size:32px;font-weight:900;color:'+d.text+';letter-spacing:-1px">'+leftScore+'<span style="font-size:18px;color:'+d.sub+';margin:0 4px">:</span>'+rightScore+'</div>';
-    if(g.inningInfo) html += '<div style="font-size:10px;color:'+d.sub+'">'+g.inningInfo+'</div>';
     html += '</div>';
-    // 오른쪽
-    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">';
-    html += logo(rightTeam, 52);
-    html += '<div style="font-size:12px;font-weight:700;color:'+(rightTeam==='KIA'?'#E31837':d.text)+'">'+( T[rightTeam]?T[rightTeam].name.split(' ').pop():rightTeam)+'</div>';
-    html += '<div style="font-size:10px;color:'+d.sub+'">HOME</div>';
+    // 오른쪽: WIN/LOSE 배지 (사진처럼 둥근 박스)
+    html += '<div style="background:'+resultBg+';border:1.5px solid '+resultColor+';border-radius:14px;padding:8px 16px;text-align:center;min-width:64px">';
+    html += '<div style="font-size:15px;font-weight:900;color:'+resultColor+'">'+resultEn+'</div>';
+    html += '<div style="font-size:11px;font-weight:600;color:'+resultColor+';margin-top:1px">'+resultKr+'</div>';
     html += '</div>';
     html += '</div>';
     html += '</div>'; // 상단 끝
 
-    // 티켓 찢긴 효과 (반원 노치)
-    html += '<div style="background:'+d.card+';border-left:2.5px solid #E31837;border-right:2.5px solid #E31837;display:flex;align-items:center;height:20px;position:relative;overflow:visible">';
-    html += '<div style="position:absolute;left:-10px;width:20px;height:20px;border-radius:50%;background:'+(d.dark?'#0A0E1A':'#E8ECF1')+';border:2.5px solid #E31837;z-index:1"></div>';
-    html += '<div style="flex:1;border-top:2px dashed rgba(227,24,55,0.3);margin:0 14px"></div>';
-    html += '<div style="position:absolute;right:-10px;width:20px;height:20px;border-radius:50%;background:'+(d.dark?'#0A0E1A':'#E8ECF1')+';border:2.5px solid #E31837;z-index:1"></div>';
+    // ── 점선 구분선 (노치 포함) ──
+    html += '<div style="position:relative;height:1px;margin:0 0">';
+    // 왼쪽 반원 노치
+    html += '<div style="position:absolute;left:-10px;top:-10px;width:20px;height:20px;border-radius:50%;background:'+(d.dark?'#0A0E1A':'#E8ECF1')+';z-index:2"></div>';
+    // 점선
+    html += '<div style="border-top:2px dashed '+(d.dark?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.1)')+';margin:0 10px"></div>';
+    // 오른쪽 반원 노치
+    html += '<div style="position:absolute;right:-10px;top:-10px;width:20px;height:20px;border-radius:50%;background:'+(d.dark?'#0A0E1A':'#E8ECF1')+';z-index:2"></div>';
     html += '</div>';
 
-    // 티켓 하단 (메모 영역)
-    html += '<div style="background:'+d.card+';border:2.5px solid #E31837;border-top:none;border-radius:0 0 18px 18px;padding:12px 18px 16px">';
-    if(memoData.watch) {
-      html += '<span style="font-size:10px;font-weight:700;background:'+(memoData.watch==='직관'?'rgba(227,24,55,0.1)':'rgba(0,120,255,0.1)')+';color:'+(memoData.watch==='직관'?'#E31837':'#0078ff')+';border-radius:5px;padding:2px 8px;margin-bottom:8px;display:inline-block">'+(memoData.watch==='직관'?'⚾ 직관':'📺 집관')+'</span><br>';
+    // ── 티켓 하단: 팀 로고 + 스코어 (사진처럼 크게) ──
+    html += '<div style="padding:22px 20px 20px">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between">';
+    // AWAY팀
+    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">';
+    html += logo(g.away, 68);
+    html += '<div style="font-size:14px;font-weight:800;color:'+(g.away==='KIA'?'#E31837':d.text)+'">'+awayShort+'</div>';
+    html += '<div style="font-size:11px;color:'+d.sub+';letter-spacing:0.05em">AWAY</div>';
+    html += '</div>';
+    // 스코어
+    html += '<div style="text-align:center;padding:0 8px">';
+    html += '<div style="font-size:36px;font-weight:900;color:'+d.text+';letter-spacing:-1px">'+(g.awayScore??0)+'<span style="font-size:22px;color:'+d.muted+';margin:0 6px">:</span>'+(g.homeScore??0)+'</div>';
+    html += '</div>';
+    // HOME팀
+    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">';
+    html += logo(g.home, 68);
+    html += '<div style="font-size:14px;font-weight:800;color:'+(g.home==='KIA'?'#E31837':d.text)+'">'+homeShort+'</div>';
+    html += '<div style="font-size:11px;color:'+d.sub+';letter-spacing:0.05em">HOME</div>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>'; // 하단 스코어 끝
+
+    // ── 메모 영역 (직관/집관 있을 때만 구분선 + 표시) ──
+    const hasMemo = memoData.watch || memoData.photo || memoData.text;
+    if (hasMemo) {
+      html += '<div style="border-top:1px solid '+d.bgB+';margin:0 20px;padding:12px 0 4px">';
+      if(memoData.watch) {
+        const watchColor = memoData.watch==='직관'?'#E31837':'#0078ff';
+        const watchBg = memoData.watch==='직관'?'rgba(227,24,55,0.08)':'rgba(0,120,255,0.08)';
+        html += '<span style="font-size:11px;font-weight:700;background:'+watchBg+';color:'+watchColor+';border-radius:6px;padding:3px 10px;display:inline-block;margin-bottom:6px">'+(memoData.watch==='직관'?'⚾ 직관':'📺 집관')+'</span>';
+      }
+      if(memoData.photo) {
+        html += '<img src="'+memoData.photo+'" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:130px;object-fit:cover"/>';
+      }
+      if(memoData.text) {
+        html += '<div style="font-size:12px;color:'+d.sub+';line-height:1.6;white-space:pre-wrap">'+memoData.text+'</div>';
+      }
+      html += '</div>';
     }
-    if(memoData.photo) {
-      html += '<img src="'+memoData.photo+'" style="width:100%;border-radius:8px;margin-bottom:8px;max-height:130px;object-fit:cover"/>';
-    }
+
+    // 메모 입력 (숨겨진 영역 - 클릭하면 모달에서 입력)
+    html += '<div style="padding:0 20px 16px">';
     const memoId = 'rec-memo-'+g.date+'-'+g.away+'-'+g.home;
-    html += '<textarea id="'+memoId+'" placeholder="메모를 남겨보세요... ✍️" '
+    html += '<textarea id="'+memoId+'" placeholder="탭해서 메모 남기기... ✍️" '
       + 'onclick="event.stopPropagation()" '
       + 'data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'" '
       + 'onchange="saveRecordMemoEl(this)" '
-      + 'style="width:100%;min-height:56px;padding:8px;background:transparent;border:1px solid '+d.bgB+';border-radius:8px;color:'+d.text+';font-size:12px;line-height:1.6;resize:none">'
+      + 'style="width:100%;min-height:40px;padding:8px 10px;background:'+d.bg+';border:1px solid '+d.bgB+';border-radius:10px;color:'+d.text+';font-size:12px;line-height:1.6;resize:none;box-sizing:border-box">'
       + (memoData.text||'')+'</textarea>';
     html += '</div>';
-    html += '</div>';
+
+    html += '</div>'; // 티켓 전체 끝
   });
 
   return html;
@@ -2302,3 +2325,4 @@ render();
 </script>
 </body>
 </html>
+
