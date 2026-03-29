@@ -816,7 +816,7 @@ function renderHeader(d) {
   document.getElementById('header').innerHTML = `
     <div style="background:${state.dark?'linear-gradient(180deg,#111827 0%,transparent 100%)':'linear-gradient(180deg,#fff 0%,transparent 100%)'};padding:18px 16px 14px">
       <div style="max-width:600px;margin:0 auto">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:${state.tab==='cal'?'10px':'0'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0">
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:24px">🐯</span>
             <div>
@@ -832,36 +832,7 @@ function renderHeader(d) {
             </div>
           </div>
         </div>
-        ${(()=>{
-          if(state.tab !== 'cal') return '';
-          const kstNow = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
-          const todayStr = kstNow.getFullYear()+'-'+String(kstNow.getMonth()+1).padStart(2,'0')+'-'+String(kstNow.getDate()).padStart(2,'0');
-          const todayKia = SCH.find(g=>g.date===todayStr&&(g.away==='KIA'||g.home==='KIA'));
-          const kiaTarget = todayKia || SCH.find(g=>g.date>=todayStr&&(g.away==='KIA'||g.home==='KIA')&&g.status!=='FINAL');
-          if(!kiaTarget) return '';
-          const isHome=kiaTarget.home==='KIA';
-          const opp=isHome?kiaTarget.away:kiaTarget.home;
-          const isLive=kiaTarget.status==='LIVE', isFinal=kiaTarget.status==='FINAL';
-          const kScore=isHome?(kiaTarget.homeScore??0):(kiaTarget.awayScore??0);
-          const oScore=isHome?(kiaTarget.awayScore??0):(kiaTarget.homeScore??0);
-          const badge = isLive?'<span style="font-size:9px;background:#ff3b3b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">LIVE</span>'
-            : isFinal?'<span style="font-size:9px;background:rgba(255,255,255,0.2);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-right:4px">종료</span>':'';
-          const subLine = isLive ? (kiaTarget.inningInfo || '경기 시작')
-            : isFinal ? '오늘 경기 결과'
-            : (todayKia ? `${kiaTarget.time} 경기 예정` : `${kiaTarget.time} 다음 경기 예정`);
-          return `<div onclick="selDate('${kiaTarget.date}')" style="background:linear-gradient(135deg,#E31837,#c0102a);border-radius:12px;padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:10px">
-            <img src="${T['KIA'].img}" style="width:36px;height:36px;object-fit:contain"/>
-            <div style="flex:1">
-              <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:700">${badge}${subLine}</div>
-              <div style="font-size:14px;font-weight:900;color:#fff">vs ${T[opp]?.name||opp}</div>
-            </div>
-            <div style="text-align:right">
-              ${(isLive||isFinal)?`<div style="font-size:16px;font-weight:900;color:#fff">${kScore} : ${oScore}</div>`:''}
-              <div style="font-size:11px;color:rgba(255,255,255,0.8)">${isFinal ? kiaTarget.date : kiaTarget.time}</div>
-            </div>
-            <img src="${T[opp]?.img||''}" style="width:36px;height:36px;object-fit:contain"/>
-          </div>`;
-        })()}
+
       </div>
     </div>`;
 }
@@ -981,49 +952,67 @@ function renderCalSplit(d) {
       </div>`;
     }).join('');
   }
-  // 다음 KIA 경기 카운트다운
+  // ── KIA 경기 배너 (오늘경기 예정→LIVE→종료결과, 자정 후 다음경기) ──
   const kstNow2 = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
   const todayStr2 = kstNow2.getFullYear()+'-'+String(kstNow2.getMonth()+1).padStart(2,'0')+'-'+String(kstNow2.getDate()).padStart(2,'0');
-  const nextKia = SCH.find(g=>g.date>=todayStr2&&(g.away==='KIA'||g.home==='KIA')&&g.status!=='FINAL');
-  let countdownHtml = '';
-  if(nextKia && nextKia.date > todayStr2) {
-    const [ny,nm,nd] = nextKia.date.split('-').map(Number);
+  // 오늘 KIA 경기 (FINAL 포함 — 오늘 경기가 끝난 것도 보여줌)
+  const todayKiaGame = SCH.find(g=>g.date===todayStr2&&(g.away==='KIA'||g.home==='KIA'));
+  // 다음 예정 경기 (오늘 이후)
+  const nextKiaFuture = SCH.find(g=>g.date>todayStr2&&(g.away==='KIA'||g.home==='KIA')&&g.status!=='FINAL');
+  // 배너 대상: 오늘 경기 있으면 오늘 것, 없으면 다음 경기
+  const bannerGame = todayKiaGame || nextKiaFuture;
+  let nextBannerHtml = '';
+  if (bannerGame) {
+    const opp2 = bannerGame.home==='KIA' ? bannerGame.away : bannerGame.home;
+    const isHome2 = bannerGame.home==='KIA';
+    const isToday2 = bannerGame.date === todayStr2;
+    const isLiveNow = bannerGame.status==='LIVE';
+    const isFinalNow = bannerGame.status==='FINAL';
+    const kScore2 = isHome2?(bannerGame.homeScore??0):(bannerGame.awayScore??0);
+    const oScore2 = isHome2?(bannerGame.awayScore??0):(bannerGame.homeScore??0);
+    const isWin2 = kScore2 > oScore2;
+
+    const [ny,nm,nd] = bannerGame.date.split('-').map(Number);
     const nextD = new Date(ny,nm-1,nd);
     const nowD = new Date(kstNow2.getFullYear(),kstNow2.getMonth(),kstNow2.getDate());
     const diffDays = Math.round((nextD-nowD)/(1000*60*60*24));
-    const opp2 = nextKia.home==='KIA'?nextKia.away:nextKia.home;
-    const isHome2 = nextKia.home==='KIA';
-    countdownHtml = `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
-      <div style="font-size:22px">⏱️</div>
-      <div style="flex:1">
-        <div style="font-size:11px;color:${d.sub};font-weight:700">다음 KIA 경기</div>
-        <div style="font-size:13px;font-weight:900;color:${d.text}">vs ${T[opp2]?.name||opp2} <span style="color:#E31837">${diffDays}일 후</span></div>
-        <div style="font-size:10px;color:${d.sub}">${nextKia.date} · ${nextKia.time} · ${isHome2?'홈':'원정'}</div>
+    const dw3=['일','월','화','수','목','금','토'][nextD.getDay()];
+    const dateDisp = `${nm}/${nd}(${dw3})`;
+    const stadDisp = bannerGame.stad ? ` · ${bannerGame.stad}` : '';
+
+    let subLabel, mainContent, rightContent;
+
+    if (isLiveNow) {
+      subLabel = `🔴 LIVE · ${bannerGame.inningInfo||''}`;
+      mainContent = `<div style="font-size:17px;font-weight:900;color:#fff">vs ${T[opp2]?.name||opp2}</div>`;
+      rightContent = `<div style="font-size:22px;font-weight:900;color:#fff;text-align:right">${kScore2}<span style="font-size:14px;opacity:0.7;margin:0 4px">:</span>${oScore2}</div>`;
+    } else if (isFinalNow && isToday2) {
+      // 오늘 경기 종료 → 결과 보여줌
+      subLabel = `경기 종료 · ${isWin2?'✅ 승리':'❌ 패배'}`;
+      mainContent = `<div style="font-size:17px;font-weight:900;color:#fff">vs ${T[opp2]?.name||opp2}</div>`;
+      rightContent = `<div style="font-size:22px;font-weight:900;color:#fff;text-align:right">${kScore2}<span style="font-size:14px;opacity:0.7;margin:0 4px">:</span>${oScore2}</div>`;
+    } else {
+      // 예정 경기
+      subLabel = isToday2 ? `${bannerGame.time} 오늘 경기 예정` : `${bannerGame.time} 다음 경기 예정`;
+      const diffTxt = !isToday2 && diffDays>0 ? `<span style="font-size:15px;font-weight:900;color:rgba(255,255,255,0.85);margin-left:6px">${diffDays}일 후</span>` : '';
+      mainContent = `<div style="font-size:17px;font-weight:900;color:#fff">vs ${T[opp2]?.name||opp2}${diffTxt}</div>`;
+      rightContent = '';
+    }
+
+    nextBannerHtml = `<div onclick="selDate('${bannerGame.date}')" style="background:linear-gradient(135deg,#E31837,#c0102a);border-radius:16px;padding:14px 16px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(227,24,55,0.25)">
+      ${logo('KIA',44)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:3px">${subLabel}</div>
+        ${mainContent}
+        <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px">${dateDisp}${stadDisp} · ${isHome2?'홈':'원정'}</div>
       </div>
-      ${logo(opp2,32)}
+      ${rightContent ? `<div>${rightContent}</div>` : ''}
+      ${logo(opp2,44)}
     </div>`;
   }
 
   const calHtml = `
-    ${(()=>{
-      const dday = getDday();
-      const isDday = dday === 'D-Day';
-
-      return `<div style="background:linear-gradient(135deg,rgba(227,24,55,0.15),rgba(255,179,0,0.1));border:1px solid rgba(227,24,55,0.3);border-radius:12px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:20px">⚾</span>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:900;color:${d.text}">
-            ${dday==='POSTSEASON'?'🍂 가을야구 시작!':isDday?'🎉 오늘 KBO 개막!':dday.startsWith('D+')?'🔥 2026 KBO 시즌':'2026 KBO 개막까지'} <span style="color:#E31837">${dday==='POSTSEASON'?'포스트시즌':dday}</span>
-          </div>
-          <div style="font-size:11px;color:${d.sub}">3/28(토) · 인천 SSG랜더스필드 · 14:00</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;color:#FFB300;font-weight:700">KIA 원정개막</div>
-          <div style="font-size:11px;color:${d.sub}">🐯 vs 🚀</div>
-        </div>
-      </div>`;
-    })()}
-    ${countdownHtml}
+    ${nextBannerHtml}
     <div style="position:relative;display:flex;align-items:center;justify-content:center;margin-bottom:12px;height:36px">
       <div style="position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:none">
         <button onclick="prevMo()" style="color:#E31837;font-size:22px;padding:4px 8px;line-height:1;pointer-events:auto">‹</button>
