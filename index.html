@@ -681,8 +681,10 @@ const STAND=[
   {r:10,s:"키움",name:"키움 히어로즈",note:""},
 ];
 
+const _kstNow0 = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
+const _today0 = _kstNow0.getFullYear()+'-'+String(_kstNow0.getMonth()+1).padStart(2,'0')+'-'+String(_kstNow0.getDate()).padStart(2,'0');
 let state = {
-  tab:'cal', dark:false, yr:2026, mo:3, sel:'2026-03-28',
+  tab:'cal', dark:false, yr:_kstNow0.getFullYear(), mo:_kstNow0.getMonth()+1, sel:_today0,
   lcat:'batting', modalGame:null, modalLt:'away', clock:new Date(),
   memoTab: false,
 };
@@ -858,7 +860,8 @@ function renderCalSplit(d) {
   const {yr,mo,sel}=state;
   const WDAYS=['일','월','화','수','목','금','토'];
   const f=fdow(yr,mo), days=dim(yr,mo);
-  const today='2026-03-27';
+  const kstNow0=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
+  const today=kstNow0.getFullYear()+'-'+String(kstNow0.getMonth()+1).padStart(2,'0')+'-'+String(kstNow0.getDate()).padStart(2,'0');
   const kmap={};
   SCH.forEach(g => {
     if(g.away!=='KIA'&&g.home!=='KIA') return;
@@ -1028,7 +1031,7 @@ function renderCal(d) {
 }
 
 function renderBaseballRecord(d) {
-  // KIA 경기 중 FINAL인 것만 (순서: 최신순)
+  // KIA 경기 중 FINAL인 것만 (최신순 - 위에 최신, 아래 오래된 순)
   const kiaGames = SCH.filter(g =>
     g.status === 'FINAL' && (g.away === 'KIA' || g.home === 'KIA')
   ).sort((a,b) => b.date.localeCompare(a.date));
@@ -1041,61 +1044,105 @@ function renderBaseballRecord(d) {
       + '</div>';
   }
 
-  let html = '<div style="font-size:13px;font-weight:800;color:'+d.text+';margin-bottom:16px">⚾ 내 야구 기록</div>';
+  let html = '<div style="font-size:13px;font-weight:800;color:'+d.text+';margin-bottom:16px">⚾ 경기 기록 <span style="font-size:11px;color:'+d.sub+';font-weight:400">'+kiaGames.length+'경기</span></div>';
 
   kiaGames.forEach(function(g) {
     const isHome = g.home === 'KIA';
     const opp = isHome ? g.away : g.home;
     const kiaScore = isHome ? g.homeScore : g.awayScore;
     const oppScore = isHome ? g.awayScore : g.homeScore;
+    const isDraw = kiaScore === oppScore;
     const isWin = kiaScore > oppScore;
+    const resultColor = isWin ? '#E31837' : isDraw ? '#FFB300' : '#4FC3F7';
+    const resultLabel = isWin ? '승' : isDraw ? '무' : '패';
     const memoKey = 'm_'+g.date+'_'+g.away+'_'+g.home;
     let memoData = {};
     try { memoData = JSON.parse(localStorage.getItem(memoKey)||'{}'); if(typeof memoData==='string') memoData={text:memoData}; } catch(e) {}
 
-    const winColor = isWin ? '#E31837' : '#4FC3F7';
-    const winLabel = isWin ? '승' : '패';
+    const [yr,mo,da] = g.date.split('-');
+    const dw = ['일','월','화','수','목','금','토'][new Date(g.date).getDay()];
 
-    // 티켓 형태
-    html += '<div style="margin-bottom:14px;cursor:pointer" onclick="openGameByKey(this)" data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'">';
-    // 티켓 상단 (메인 정보)
-    html += '<div style="background:'+d.card+';border:2px solid '+winColor+';border-radius:16px 16px 0 0;padding:14px 16px">';
-    // 날짜 + 승패
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
-    html += '<span style="font-size:11px;color:'+d.sub+'">'+g.date+' · '+(isHome?'홈':'원정')+'</span>';
-    html += '<span style="font-size:12px;font-weight:900;color:#fff;background:'+winColor+';border-radius:20px;padding:2px 10px">'+winLabel+'</span>';
+    // ── 티켓 ──
+    html += '<div style="margin-bottom:16px;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.10);cursor:pointer" onclick="openGameByKey(this)" data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'">';
+
+    // 티켓 상단: 날짜 바
+    html += '<div style="background:'+resultColor+';padding:7px 16px;display:flex;justify-content:space-between;align-items:center">';
+    html += '<span style="font-size:11px;font-weight:700;color:#fff">'+mo+'월 '+da+'일 ('+dw+') · '+(isHome?'홈':'원정')+'</span>';
+    html += '<span style="font-size:11px;font-weight:900;color:#fff;background:rgba(0,0,0,0.2);border-radius:10px;padding:2px 10px">'+resultLabel+'</span>';
     html += '</div>';
+
+    // 티켓 메인: 스코어
+    html += '<div style="background:'+d.card+';padding:14px 16px 12px">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+    // KIA
+    html += '<div style="display:flex;align-items:center;gap:8px;flex:1">'+logo('KIA',38)+'<div><div style="font-size:12px;font-weight:800;color:#ff6b6b">KIA</div><div style="font-size:10px;color:'+d.sub+'">'+(isHome?'HOME':'AWAY')+'</div></div></div>';
     // 스코어
-    html += '<div style="display:flex;align-items:center;justify-content:space-between">';
-    html += '<div style="display:flex;align-items:center;gap:8px;flex:1">'+logo('KIA',36)+'<span style="font-size:13px;font-weight:800;color:#ff6b6b">KIA 타이거즈</span></div>';
-    html += '<div style="text-align:center;padding:0 8px"><span style="font-size:24px;font-weight:900;color:'+winColor+'">'+kiaScore+'</span><span style="font-size:13px;color:'+d.sub+'"> : </span><span style="font-size:24px;font-weight:900;color:'+d.text+'">'+oppScore+'</span></div>';
-    html += '<div style="display:flex;align-items:center;gap:8px;flex:1;flex-direction:row-reverse">'+logo(opp,36)+'<span style="font-size:13px;font-weight:700;color:'+d.text+';text-align:right">'+(T[opp]?T[opp].name:opp)+'</span></div>';
+    html += '<div style="text-align:center;padding:0 6px">';
+    html += '<div style="font-size:26px;font-weight:900;color:'+d.text+'">'+(kiaScore??'-')+' <span style="font-size:14px;color:'+d.sub+'">:</span> '+(oppScore??'-')+'</div>';
+    if(g.inningInfo) html += '<div style="font-size:10px;color:'+d.sub+'">'+g.inningInfo+'</div>';
     html += '</div>';
+    // 상대팀
+    html += '<div style="display:flex;align-items:center;gap:8px;flex:1;flex-direction:row-reverse">'+logo(opp,38)+'<div style="text-align:right"><div style="font-size:12px;font-weight:700;color:'+d.text+'">'+(T[opp]?T[opp].name.replace(' ','<br>'):opp)+'</div><div style="font-size:10px;color:'+d.sub+'">'+(isHome?'AWAY':'HOME')+'</div></div></div>';
+    html += '</div>';
+
+    // 투수 정보
+    if(g.winPitcher || g.losePitcher || g.awayStarter || g.homeStarter) {
+      html += '<div style="border-top:1px solid '+d.bgB+';padding-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      // 왼쪽: away팀 투수
+      const awayColor = (T[g.away]||{}).color||'#888';
+      html += '<div style="text-align:center">';
+      if(g.losePitcher && (g.away==='KIA'? !g.winPitcher : true)) {
+        // away가 진 경우 패전투수 표시
+        const isAwayLose = g.losePitcher === g.awayStarter || (g.awayScore < g.homeScore);
+        if(isAwayLose || g.away!=='KIA') {
+          html += '<div style="font-size:9px;color:'+awayColor+';font-weight:700;margin-bottom:2px">패 패전투수</div>';
+          html += '<div style="font-size:14px;font-weight:900;color:'+d.text+'">'+g.losePitcher+'</div>';
+        } else {
+          html += '<div style="font-size:9px;color:'+awayColor+';font-weight:700;margin-bottom:2px">승 승리투수</div>';
+          html += '<div style="font-size:14px;font-weight:900;color:'+d.text+'">'+g.winPitcher+'</div>';
+        }
+      }
+      html += '<div style="font-size:10px;color:'+d.sub+';margin-top:3px">'+g.away+(g.awayStarter?' · '+g.awayStarter:'')+'</div>';
+      html += '</div>';
+      // 오른쪽: home팀 투수
+      const homeColor = (T[g.home]||{}).color||'#888';
+      html += '<div style="text-align:center">';
+      if(g.winPitcher || g.losePitcher) {
+        const isHomeLose = g.homeScore < g.awayScore;
+        if(isHomeLose) {
+          html += '<div style="font-size:9px;color:'+homeColor+';font-weight:700;margin-bottom:2px">패 패전투수</div>';
+          html += '<div style="font-size:14px;font-weight:900;color:'+d.text+'">'+g.losePitcher+'</div>';
+        } else {
+          html += '<div style="font-size:9px;color:'+homeColor+';font-weight:700;margin-bottom:2px">승 승리투수</div>';
+          html += '<div style="font-size:14px;font-weight:900;color:'+d.text+'">'+g.winPitcher+'</div>';
+        }
+      }
+      html += '<div style="font-size:10px;color:'+d.sub+';margin-top:3px">'+g.home+(g.homeStarter?' · '+g.homeStarter:'')+'</div>';
+      html += '</div>';
+      html += '</div>';
+    }
     html += '</div>';
 
     // 티켓 점선 구분선
-    html += '<div style="background:'+d.card+';border-left:2px solid '+winColor+';border-right:2px solid '+winColor+';display:flex;align-items:center;padding:0 12px">';
-    html += '<div style="flex:1;border-top:2px dashed '+d.bgB+'"></div>';
-    html += '<div style="width:12px;height:12px;border-radius:50%;background:'+d.bg+';border:2px solid '+winColor+';margin:0 6px;flex-shrink:0"></div>';
-    html += '<div style="flex:1;border-top:2px dashed '+d.bgB+'"></div>';
+    html += '<div style="background:'+d.card+';border-left:none;border-right:none;display:flex;align-items:center;padding:0;border-top:2px dashed '+d.bgB+';position:relative">';
+    html += '<div style="position:absolute;left:-8px;width:16px;height:16px;border-radius:50%;background:'+(d.dark?'#0A0E1A':'#E8ECF1')+';top:-8px"></div>';
+    html += '<div style="position:absolute;right:-8px;width:16px;height:16px;border-radius:50%;background:'+(d.dark?'#0A0E1A':'#E8ECF1')+';top:-8px"></div>';
     html += '</div>';
 
-    // 티켓 하단 (메모)
-    html += '<div style="background:'+(d.dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.02)')+';border:2px solid '+winColor+';border-top:none;border-radius:0 0 16px 16px;padding:12px 16px">';
+    // 티켓 하단: 메모
+    html += '<div style="background:'+(d.dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.015)')+';padding:10px 16px 14px">';
     if(memoData.watch) {
       html += '<span style="font-size:10px;font-weight:700;background:'+(memoData.watch==='직관'?'rgba(227,24,55,0.1)':'rgba(0,120,255,0.1)')+';color:'+(memoData.watch==='직관'?'#E31837':'#0078ff')+';border-radius:5px;padding:2px 7px;margin-bottom:6px;display:inline-block">'+(memoData.watch==='직관'?'⚾ 직관':'📺 집관')+'</span><br>';
     }
     if(memoData.photo) {
-      html += '<img src="'+memoData.photo+'" style="width:100%;border-radius:8px;margin-bottom:8px;max-height:140px;object-fit:cover"/>';
+      html += '<img src="'+memoData.photo+'" style="width:100%;border-radius:8px;margin-bottom:8px;max-height:130px;object-fit:cover"/>';
     }
-    // 메모 인라인 편집 가능
     const memoId = 'rec-memo-'+g.date+'-'+g.away+'-'+g.home;
-    const safeDate = g.date, safeAway = g.away, safeHome = g.home;
     html += '<textarea id="'+memoId+'" placeholder="메모를 남겨보세요... ✍️" '
       + 'onclick="event.stopPropagation()" '
-      + 'data-date="'+safeDate+'" data-away="'+safeAway+'" data-home="'+safeHome+'" '
+      + 'data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'" '
       + 'onchange="saveRecordMemoEl(this)" '
-      + 'style="width:100%;min-height:60px;padding:8px;background:transparent;border:1px solid '+d.bgB+';border-radius:8px;color:'+d.text+';font-size:12px;line-height:1.6;resize:none">'
+      + 'style="width:100%;min-height:56px;padding:8px;background:transparent;border:1px solid '+d.bgB+';border-radius:8px;color:'+d.text+';font-size:12px;line-height:1.6;resize:none">'
       + (memoData.text||'')+'</textarea>';
     html += '</div>';
     html += '</div>';
@@ -1401,43 +1448,22 @@ function renderModal(d) {
   try{ memoData=JSON.parse(memoRaw); if(typeof memoData==='string') memoData={text:memoData}; }catch(e){ memoData={text:memoRaw}; }
   const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
 
-  // 이닝 스코어
-  const lInn = lTeam===g.away ? g.awayInnings : g.homeInnings;
-  const rInn = rTeam===g.away ? g.awayInnings : g.homeInnings;
-  const hasInnData = !isSch && lInn && lInn.some(x=>x>=0);
-  const inningText = g.inningInfo || (g.inning ? `${g.inning}회` : '');
-
-  const inningHtml = isSch
-    ? `<div style="text-align:center;padding:16px;color:${d.sub};font-size:12px">경기 예정 · 경기 후 스코어가 표시됩니다</div>`
-    : hasInnData
-      ? `<div style="overflow-x:auto"><table class="inn-table">
-          <tr>
-            <td class="team-cell" style="color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</td>
-            ${lInn.map((s,i)=>`<td style="color:${s>0?'#E31837':d.text};font-weight:${s>0?900:400}">${s>=0?s:'·'}</td>`).join('')}
-            <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${lScore}</td>
-          </tr>
-          <tr>
-            <td class="team-cell" style="color:${rTeam==='KIA'?'#ff6b6b':d.text}">${T[rTeam]?.name||rTeam}</td>
-            ${rInn.map((s,i)=>`<td style="color:${s>0?'#E31837':d.text};font-weight:${s>0?900:400}">${s>=0?s:'·'}</td>`).join('')}
-            <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${rScore}</td>
-          </tr>
-        </table></div>`
-      : `<div style="padding:14px 10px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div style="display:flex;align-items:center;gap:8px;flex:1">${logo(lTeam,22)}<span style="font-size:13px;font-weight:800;color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</span></div>
-            <span style="font-size:28px;font-weight:900;color:${d.text};min-width:28px;text-align:center">${lScore}</span>
-            <div style="display:flex;flex-direction:column;align-items:center;padding:0 10px">
-              ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 6px;font-weight:700;margin-bottom:3px">LIVE</span>`:''}
-              <span style="font-size:11px;color:${d.sub};font-weight:700">${inningText}</span>
-            </div>
-            <span style="font-size:28px;font-weight:900;color:${d.text};min-width:28px;text-align:center">${rScore}</span>
-            <div style="display:flex;align-items:center;gap:8px;flex:1;flex-direction:row-reverse">${logo(rTeam,22)}<span style="font-size:13px;font-weight:800;color:${rTeam==='KIA'?'#ff6b6b':d.text};text-align:right">${T[rTeam]?.name||rTeam}</span></div>
-          </div>
-          ${(g.awayPitcher||g.homePitcher)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;border-top:1px solid ${d.bgB};padding-top:10px">
-            <div style="text-align:center"><div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.away} 현재 투수</div><div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayPitcher||'-'}</div></div>
-            <div style="text-align:center"><div style="font-size:9px;color:${d.sub};margin-bottom:2px">${g.home} 현재 투수</div><div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homePitcher||'-'}</div></div>
-          </div>`:''}
-        </div>`;
+  // 이닝 스코어 테이블
+  const inningHtml = (!isSch&&g.awayInnings&&g.homeInnings&&g.awayInnings.some(x=>x>=0)) ? `
+    <div style="overflow-x:auto">
+      <table class="inn-table">
+        <tr>
+          <td class="team-cell" style="color:${lTeam==='KIA'?'#ff6b6b':d.text}">${T[lTeam]?.name||lTeam}</td>
+          ${(lTeam===g.away?g.awayInnings:g.homeInnings).map((s,i)=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
+          <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${lScore}</td>
+        </tr>
+        <tr>
+          <td class="team-cell" style="color:${rTeam==='KIA'?'#ff6b6b':d.text}">${T[rTeam]?.name||rTeam}</td>
+          ${(rTeam===g.away?g.awayInnings:g.homeInnings).map((s,i)=>`<td style="color:${d.text}">${s>=0?s:'·'}</td>`).join('')}
+          <td style="font-weight:900;color:${d.text};border-left:1px solid ${d.bgB}">${rScore}</td>
+        </tr>
+      </table>
+    </div>` : `<div style="text-align:center;padding:16px;color:${d.sub};font-size:12px">${isLive?`${g.inning||''}이닝 진행 중`:'경기 예정 · 경기 후 스코어가 표시됩니다'}</div>`;
 
   document.getElementById('modal-content').innerHTML = `
     <div style="display:flex;justify-content:center;padding:10px 0 2px">
@@ -1488,80 +1514,89 @@ function renderModal(d) {
         </div>
         <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
       </div>
-      ${(g.awayStarter||g.homeStarter||g.winPitcher||g.losePitcher)?`<div style="margin-bottom:18px">
+      ${(g.awayStarter||g.homeStarter||g.winPitcher||g.losePitcher||g.awayPitcher||g.homePitcher)?`<div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
           <span style="font-size:15px">⚾</span>
-          <span style="font-size:13px;font-weight:800;color:${d.text}">${isFinal?'투수':'선발투수'}</span>
+          <span style="font-size:13px;font-weight:800;color:${d.text}">투수</span>
         </div>
-        ${isFinal&&(g.winPitcher||g.losePitcher)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          ${g.winPitcher?`<div style="background:rgba(0,200,100,0.08);border:1px solid rgba(0,200,100,0.25);border-radius:12px;padding:12px">
-            <div style="font-size:9px;font-weight:700;color:#00C864;margin-bottom:4px"><span style="background:rgba(0,200,100,0.15);border-radius:4px;padding:1px 6px">승</span> 승리투수</div>
-            <div style="font-size:14px;font-weight:800;color:${d.text}">${g.winPitcher}</div>
-          </div>`:''}
-          ${g.losePitcher?`<div style="background:rgba(227,24,55,0.06);border:1px solid rgba(227,24,55,0.2);border-radius:12px;padding:12px">
-            <div style="font-size:9px;font-weight:700;color:#E31837;margin-bottom:4px"><span style="background:rgba(227,24,55,0.12);border-radius:4px;padding:1px 6px">패</span> 패전투수</div>
-            <div style="font-size:14px;font-weight:800;color:${d.text}">${g.losePitcher}</div>
-          </div>`:''}
-        </div>`:''}
-        ${(g.awayStarter||g.homeStarter)?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${logo(g.away,18)}<span style="font-size:10px;font-weight:700;color:${d.sub}">${g.away}</span></div>
-            <div style="font-size:14px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
-          </div>
-          <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:12px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">${logo(g.home,18)}<span style="font-size:10px;font-weight:700;color:${d.sub}">${g.home}</span></div>
-            <div style="font-size:14px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
-          </div>
-        </div>`:''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <!-- AWAY팀 투수 -->
+          ${(()=>{
+            const awayColor=(T[g.away]||{}).color||'#888';
+            // away팀이 진 팀인지 이긴 팀인지
+            const awayWon = g.awayScore > g.homeScore;
+            const awayWinP = awayWon ? g.winPitcher : null;
+            const awayLoseP = !awayWon ? g.losePitcher : null;
+            const awayResult = isFinal ? (awayWon?'승':'패') : null;
+            const awayResColor = awayWon?'rgba(0,200,100,0.12)':'rgba(227,24,55,0.08)';
+            const awayResBorder = awayWon?'rgba(0,200,100,0.3)':'rgba(227,24,55,0.25)';
+            const awayResTextColor = awayWon?'#00C864':'#E31837';
+            return `<div style="background:${d.bg};border:1.5px solid ${d.bgB};border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:6px">${logo(g.away,20)}<span style="font-size:12px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.away}</span></div>
+              ${isFinal&&(awayWinP||awayLoseP)?`<div style="background:${awayResColor};border:1px solid ${awayResBorder};border-radius:8px;padding:8px;text-align:center">
+                <div style="font-size:9px;font-weight:700;color:${awayResTextColor};margin-bottom:2px">${awayResult} ${awayWon?'승리투수':'패전투수'}</div>
+                <div style="font-size:15px;font-weight:900;color:${d.text}">${awayWon?awayWinP:awayLoseP}</div>
+              </div>`:''}
+              <div style="border-top:1px solid ${d.bgB};padding-top:8px">
+                <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
+                <div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
+                ${(isLive&&g.awayPitcher&&g.awayPitcher!==g.awayStarter)?`<div style="font-size:9px;color:${d.sub};margin-top:4px">현재 <span style="font-weight:700;color:${awayColor}">${g.awayPitcher}</span></div>`:''}
+                ${(isFinal&&g.awayPitcher&&g.awayPitcher!==g.awayStarter)?`<div style="font-size:9px;color:${d.sub};margin-top:4px">최종 <span style="font-weight:700;color:${awayColor}">${g.awayPitcher}</span></div>`:''}
+              </div>
+            </div>`;
+          })()}
+          <!-- HOME팀 투수 -->
+          ${(()=>{
+            const homeColor=(T[g.home]||{}).color||'#888';
+            const homeWon = g.homeScore > g.awayScore;
+            const homeWinP = homeWon ? g.winPitcher : null;
+            const homeLoseP = !homeWon ? g.losePitcher : null;
+            const homeResult = isFinal ? (homeWon?'승':'패') : null;
+            const homeResColor = homeWon?'rgba(0,200,100,0.12)':'rgba(227,24,55,0.08)';
+            const homeResBorder = homeWon?'rgba(0,200,100,0.3)':'rgba(227,24,55,0.25)';
+            const homeResTextColor = homeWon?'#00C864':'#E31837';
+            return `<div style="background:${d.bg};border:1.5px solid ${d.bgB};border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:6px">${logo(g.home,20)}<span style="font-size:12px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.home}</span></div>
+              ${isFinal&&(homeWinP||homeLoseP)?`<div style="background:${homeResColor};border:1px solid ${homeResBorder};border-radius:8px;padding:8px;text-align:center">
+                <div style="font-size:9px;font-weight:700;color:${homeResTextColor};margin-bottom:2px">${homeResult} ${homeWon?'승리투수':'패전투수'}</div>
+                <div style="font-size:15px;font-weight:900;color:${d.text}">${homeWon?homeWinP:homeLoseP}</div>
+              </div>`:''}
+              <div style="border-top:1px solid ${d.bgB};padding-top:8px">
+                <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
+                <div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
+                ${(isLive&&g.homePitcher&&g.homePitcher!==g.homeStarter)?`<div style="font-size:9px;color:${d.sub};margin-top:4px">현재 <span style="font-weight:700;color:${homeColor}">${g.homePitcher}</span></div>`:''}
+                ${(isFinal&&g.homePitcher&&g.homePitcher!==g.homeStarter)?`<div style="font-size:9px;color:${d.sub};margin-top:4px">최종 <span style="font-weight:700;color:${homeColor}">${g.homePitcher}</span></div>`:''}
+              </div>
+            </div>`;
+          })()}
+        </div>
       </div>`:''}
       <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">🧢</span>
-            <span style="font-size:13px;font-weight:800;color:${d.text}">${(isLive||isFinal)?'라인업':'선발 라인업'}</span>
+            <span style="font-size:13px;font-weight:800;color:${d.text}">선발 라인업</span>
           </div>
-          ${g.lineup?`<div style="display:flex;gap:4px">
+          ${hasLU?`<div style="display:flex;gap:4px">
             <button onclick="setModalLt('away')" style="padding:4px 10px;background:${lt==='away'?aw.color:d.bg};border:1px solid ${lt==='away'?aw.color:d.bgB};border-radius:8px;color:${lt==='away'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.away}</button>
             <button onclick="setModalLt('home')" style="padding:4px 10px;background:${lt==='home'?hw.color:d.bg};border:1px solid ${lt==='home'?hw.color:d.bgB};border-radius:8px;color:${lt==='home'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.home}</button>
           </div>`:''}
         </div>
-        ${(()=>{
-          const lu = g.lineup;
-          if (!lu) {
-            const loading = (isLive||isFinal) && !g.lineup;
-            return `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
-              <div style="font-size:24px;margin-bottom:6px">${loading?'⏳':'📋'}</div>
-              <div style="font-size:13px;color:${d.sub}">${loading?'라인업 불러오는 중...':'라인업은 경기 당일 발표됩니다'}</div>
-            </div>`;
-          }
-          const side = lt==='away' ? lu.away : lu.home;
-          const teamKey = lt==='away' ? g.away : g.home;
-          const teamColor = (T[teamKey]||{}).color||'#888';
-          const batters = side.batters||[];
-          const pitchers = side.pitchers||[];
-          return `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;overflow:hidden">
-            ${batters.length?`<div style="padding:10px 12px 0">
-              <div style="font-size:10px;font-weight:700;color:${d.sub};margin-bottom:6px;letter-spacing:0.08em">타 순</div>
-              ${batters.map(p=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid ${d.bgB}">
-                <span style="font-size:11px;font-weight:900;color:${teamColor};min-width:14px;text-align:center">${p.order}</span>
-                <span style="font-size:11px;color:${d.sub};min-width:40px">${p.pos}</span>
-                <span style="font-size:13px;font-weight:800;color:${teamKey==='KIA'?'#ff6b6b':d.text};flex:1">${p.name}${p.sub?`<span style="font-size:10px;color:${d.sub};font-weight:400"> ←${p.sub}</span>`:''}</span>
-                <span style="font-size:10px;color:${d.sub}">${p.ab>0?`${p.hit}/${p.ab}`:'-'}</span>
-                ${p.rbi>0?`<span style="font-size:10px;background:rgba(227,24,55,0.12);color:#E31837;border-radius:4px;padding:1px 5px;font-weight:700">${p.rbi}타점</span>`:''}
-              </div>`).join('')}
-            </div>`:''}
-            ${pitchers.length?`<div style="padding:10px 12px">
-              <div style="font-size:10px;font-weight:700;color:${d.sub};margin-bottom:6px;letter-spacing:0.08em">투 수</div>
-              ${pitchers.map((p,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;${i<pitchers.length-1?`border-bottom:1px solid ${d.bgB}`:''}">
-                <span style="font-size:10px;font-weight:700;color:${i===pitchers.length-1?teamColor:d.sub};min-width:14px;text-align:center">${p.seqno}</span>
-                <span style="font-size:13px;font-weight:${i===pitchers.length-1?800:500};color:${i===pitchers.length-1?(teamKey==='KIA'?'#ff6b6b':d.text):d.sub};flex:1">${p.name}${i===pitchers.length-1?` <span style="font-size:9px;background:${teamColor};color:#fff;border-radius:3px;padding:1px 5px">현재</span>`:''}</span>
-                <span style="font-size:10px;color:${d.sub}">${p.inn}이닝</span>
-                <span style="font-size:10px;color:${p.er>0?'#E31837':d.sub}">${p.er}실점</span>
-                <span style="font-size:10px;color:${d.sub}">${p.kk}K</span>
-              </div>`).join('')}
-            </div>`:''}
-          </div>`;
-        })()}
+        ${!hasLU?`<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">📋</div>
+          <div style="font-size:13px;color:${d.sub}">라인업은 경기 당일 발표됩니다</div>
+        </div>`:
+        `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:12px 10px">
+          <div style="text-align:center;margin-bottom:4px;font-size:12px;font-weight:700;color:${ct.color}">${ct.name}</div>
+          ${renderDiamond(cur,ct.color,state.dark)}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:10px">
+            ${cur.map(p=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:7px;background:${d.bg};border:1px solid ${d.bgB}">
+              <span style="font-size:10px;font-weight:900;min-width:17px;text-align:center;color:${p.p==='P'?'#fff':ct.color};background:${p.p==='P'?ct.color+'cc':'transparent'};border-radius:3px;padding:${p.p==='P'?'1px 3px':'0'}">${p.n}</span>
+              <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1">${p.name}</span>
+              <span style="font-size:10px;color:${d.sub}">${p.p}</span>
+            </div>`).join('')}
+          </div>
+        </div>`}
       </div>
       <div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1711,47 +1746,6 @@ function prevMo(){if(state.mo===1){state.yr--;state.mo=12;}else state.mo--;rende
 function nextMo(){if(state.mo===12){state.yr++;state.mo=1;}else state.mo++;render();}
 function selDate(ds){state.sel=ds;render();}
 
-// 브라우저에서 직접 네이버 라인업 API 호출
-async function fetchLineupDirect(gameId, inning) {
-  const inn = inning || 1;
-  try {
-    const url = `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`;
-    const r = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'Referer': 'https://m.sports.naver.com/',
-      }
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    const result = data?.result;
-    if (!result) return null;
-    const td = result.textRelayData || result;
-    const homeL = td.homeLineup || result.homeLineup;
-    const awayL = td.awayLineup || result.awayLineup;
-    if (!homeL && !awayL) return null;
-
-    const parseBatters = (batters) => {
-      if (!batters?.length) return [];
-      const orderMap = {};
-      batters.forEach(p => { const o = p.batOrder; if (!orderMap[o]) orderMap[o] = []; orderMap[o].push(p); });
-      return Object.entries(orderMap).sort(([a],[b])=>Number(a)-Number(b)).map(([order, players]) => {
-        const current = players.find(p=>p.cin==='true') || players.find(p=>!p.cout) || players[players.length-1];
-        const prev = players.find(p=>p.cout==='true' && p!==current);
-        return { order:Number(order), name:current.name, pos:current.posName||'', hit:current.hit||0, ab:current.ab||0, rbi:current.rbi||0, sub:prev?.name||null };
-      });
-    };
-    const parsePitchers = (pitchers) => {
-      if (!pitchers?.length) return [];
-      return pitchers.map(p=>({ seqno:p.seqno, name:p.name, inn:p.inn||'0', er:p.er||0, kk:p.kk||0, bb:p.bb||0 }));
-    };
-    return {
-      home: { batters: parseBatters(homeL?.batter), pitchers: parsePitchers(homeL?.pitcher) },
-      away: { batters: parseBatters(awayL?.batter), pitchers: parsePitchers(awayL?.pitcher) },
-    };
-  } catch(e) { return null; }
-}
-
 function openModal(idx,date) {
   const dayGs=SCH.filter(g=>g.date===date);
   const sorted=[...dayGs.filter(g=>g.away==='KIA'||g.home==='KIA'),...dayGs.filter(g=>g.away!=='KIA'&&g.home!=='KIA')];
@@ -1762,23 +1756,6 @@ function openModal(idx,date) {
   box.scrollTop = 0;
   renderModal(D()); history.pushState({modal:true},'');
   document.body.style.overflow='hidden';
-
-  // 라인업이 없으면 브라우저에서 직접 가져오기
-  const g = state.modalGame;
-  if (g && !g.lineup && (g.status==='LIVE'||g.status==='FINAL')) {
-    const inn = g.inning || 1;
-    fetchLineupDirect(g.gameId, inn).then(lineup => {
-      if (!lineup) return;
-      // SCH에 저장
-      const idx2 = SCH.findIndex(s=>s.date===g.date&&s.away===g.away&&s.home===g.home);
-      if (idx2!==-1) SCH[idx2].lineup = lineup;
-      // 현재 열려있는 모달 갱신
-      if (state.modalGame?.gameId===g.gameId) {
-        state.modalGame = SCH[idx2] || state.modalGame;
-        renderModal(D());
-      }
-    });
-  }
   let ty=null, txStart=0, canSwipeClose=false;
   box.ontouchstart=e=>{
     ty=e.touches[0].clientY;
@@ -1855,6 +1832,28 @@ setInterval(()=>{state.clock=new Date();render();},1000);
 
 
 // ── 실시간 스코어 (MLB Stats API - KBO sportId=6) ──
+// ── 경기 결과 캐시 (localStorage) ──
+function loadGameCache() {
+  try {
+    const raw = localStorage.getItem('kbo_game_cache');
+    if (!raw) return;
+    const cache = JSON.parse(raw);
+    Object.entries(cache).forEach(([key, data]) => {
+      const idx = SCH.findIndex(s => s.date+'_'+s.away+'_'+s.home === key);
+      if (idx !== -1) Object.assign(SCH[idx], data);
+    });
+  } catch(e) {}
+}
+function saveGameCache(gameKey, data) {
+  try {
+    const raw = localStorage.getItem('kbo_game_cache');
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[gameKey] = {...(cache[gameKey]||{}), ...data};
+    localStorage.setItem('kbo_game_cache', JSON.stringify(cache));
+  } catch(e) {}
+}
+loadGameCache(); // 앱 시작 시 캐시 복원
+
 async function fetchTodayScores() {
   const now = new Date();
   const kst = new Date(now.toLocaleString('en-US', {timeZone:'Asia/Seoul'}));
@@ -1862,21 +1861,9 @@ async function fetchTodayScores() {
   const yyyy = kst.getFullYear();
   const mm = pad(kst.getMonth()+1);
   const dd = pad(kst.getDate());
-  const dateStr = `${yyyy}-${mm}-${dd}`;
-
-  const TEAM = {
-    'KIA Tigers':'KIA','KT Wiz':'KT','LG Twins':'LG','SSG Landers':'SSG','NC Dinos':'NC',
-    'Doosan Bears':'두산','Lotte Giants':'롯데','Samsung Lions':'삼성','Hanwha Eagles':'한화','Kiwoom Heroes':'키움',
-  };
-  const mapTeam = n => {
-    if(!n) return n;
-    for(const [k,v] of Object.entries(TEAM)) if(n.includes(k)) return v;
-    return n;
-  };
 
   try {
-    const url = `/api/kboScores`;
-    const r = await fetch(url);
+    const r = await fetch('/api/kboScores');
     if(!r.ok) return;
     const data = await r.json();
     const games = data?.games || [];
@@ -1885,25 +1872,31 @@ async function fetchTodayScores() {
     let updated = false;
     games.forEach(g => {
       const idx = SCH.findIndex(s => s.date===g.date && s.away===g.away && s.home===g.home);
-      if(idx !== -1) {
-        if(g.status) SCH[idx].status = g.status;
-        if(g.awayScore != null) SCH[idx].awayScore = g.awayScore;
-        if(g.homeScore != null) SCH[idx].homeScore = g.homeScore;
-        if(g.awayInnings?.some(x=>x>=0)) SCH[idx].awayInnings = g.awayInnings;
-        if(g.homeInnings?.some(x=>x>=0)) SCH[idx].homeInnings = g.homeInnings;
-        if(g.inning) SCH[idx].inning = g.inning;
-        if(g.winPitcher) SCH[idx].winPitcher = g.winPitcher;
-        if(g.losePitcher) SCH[idx].losePitcher = g.losePitcher;
-        if(g.awayStarter) SCH[idx].awayStarter = g.awayStarter;
-        if(g.homeStarter) SCH[idx].homeStarter = g.homeStarter;
-        updated = true;
+      if(idx === -1) return;
+      const updates = {};
+      if(g.status) updates.status = g.status;
+      if(g.awayScore != null) updates.awayScore = g.awayScore;
+      if(g.homeScore != null) updates.homeScore = g.homeScore;
+      if(g.awayInnings?.some(x=>x>=0)) updates.awayInnings = g.awayInnings;
+      if(g.homeInnings?.some(x=>x>=0)) updates.homeInnings = g.homeInnings;
+      if(g.inning) updates.inning = g.inning;
+      if(g.inningInfo) updates.inningInfo = g.inningInfo;
+      if(g.winPitcher) updates.winPitcher = g.winPitcher;
+      if(g.losePitcher) updates.losePitcher = g.losePitcher;
+      if(g.awayStarter) updates.awayStarter = g.awayStarter;
+      if(g.homeStarter) updates.homeStarter = g.homeStarter;
+      if(g.awayPitcher) updates.awayPitcher = g.awayPitcher;
+      if(g.homePitcher) updates.homePitcher = g.homePitcher;
+      Object.assign(SCH[idx], updates);
+      // FINAL이면 캐시에 영구 저장
+      if(g.status === 'FINAL') {
+        saveGameCache(g.date+'_'+g.away+'_'+g.home, updates);
       }
+      updated = true;
     });
 
-    // 열려있는 모달도 갱신
     if(updated) {
-      const kstDate = `${yyyy}-${mm}-${dd}`;
-      if(state.sel === kstDate) render();
+      render();
       if(state.modalGame) {
         const mg = SCH.find(s => s.date===state.modalGame.date && s.away===state.modalGame.away && s.home===state.modalGame.home);
         if(mg) { state.modalGame = mg; renderModal(D()); }
