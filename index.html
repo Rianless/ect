@@ -686,7 +686,7 @@ const _today0=_kst0.getFullYear()+'-'+String(_kst0.getMonth()+1).padStart(2,'0')
 let state = {
   tab:'cal', dark:false, yr:_kst0.getFullYear(), mo:_kst0.getMonth()+1, sel:_today0,
   lcat:'batting', modalGame:null, modalLt:'away', clock:new Date(),
-  memoTab: false,
+  memoTab: false, myTab: 'rank', myTabInitialized: false,
 };
 // 즐겨찾기 로드
 let FAVS = JSON.parse(localStorage.getItem('kbo_favs')||'[]');
@@ -1171,9 +1171,11 @@ function renderBaseballRecord(d) {
       + 'data-date="'+safeD+'" data-away="'+safeA+'" data-home="'+safeH+'" '
       + 'placeholder="메모를 남겨보세요... ✍️" '
       + 'oninput="saveRecordMemoEl(this)" '
+      + 'onclick="event.stopPropagation()" '
+      + 'ontouchstart="event.stopPropagation()" '
       + 'style="width:100%;min-height:60px;padding:10px;background:'+d.bg+';border:1px solid '+d.bgB+';'
       + 'border-radius:10px;color:'+d.text+';font-size:12px;line-height:1.6;resize:none;box-sizing:border-box;'
-      + 'font-family:\'Noto Sans KR\',sans-serif;margin-bottom:8px">'
+      + 'font-family:\'Noto Sans KR\',sans-serif;margin-bottom:8px;-webkit-user-select:text;user-select:text">'
       + (memoData.text||'')+'</textarea>';
 
     // 사진 추가 버튼
@@ -1310,15 +1312,23 @@ function renderTodoMemo(d) {
   // 입력창
   html += `<div style="display:flex;gap:8px;margin-bottom:14px">
     <input id="todo-input" type="text" placeholder="새 메모 입력..." maxlength="100"
-      onkeydown="if(event.key==='Enter')addTodo()"
+      autocomplete="off"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();addTodo();}"
+      onclick="event.stopPropagation()"
+      ontouchstart="event.stopPropagation()"
       style="flex:1;padding:10px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px;
-      font-size:13px;color:${d.text};font-family:'Noto Sans KR',sans-serif;outline:none"/>
+      font-size:13px;color:${d.text};font-family:'Noto Sans KR',sans-serif;outline:none;
+      -webkit-user-select:text;user-select:text"/>
     <button onclick="addTodo()" style="padding:10px 14px;background:#E31837;color:#fff;border:none;
       border-radius:10px;font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;white-space:nowrap">추가</button>
   </div>`;
 
+  // 리스트 컨테이너 (DOM 직접 업데이트를 위해 id 부여)
+  html += `<div id="todo-list-container">`;
+
   if (!todos.length) {
     html += `<div style="text-align:center;padding:30px 0;color:${d.sub};font-size:13px">메모가 없어요. 위에 입력해보세요!</div>`;
+    html += `</div>`;
     return html;
   }
 
@@ -1358,6 +1368,7 @@ function renderTodoMemo(d) {
     html += `</div>`;
   });
 
+  html += `</div>`;
   return html;
 }
 
@@ -1370,10 +1381,63 @@ window.addTodo = function() {
   const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
   const date = now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-'+pad2(now.getDate());
   const todos = getTodos();
-  todos.unshift({ id: Date.now().toString(), text, date, done: false });
+  const newTodo = { id: Date.now().toString(), text, date, done: false };
+  todos.unshift(newTodo);
   saveTodos(todos);
   input.value = '';
-  render();
+  // render() 대신 DOM 직접 업데이트 (포커스 유지)
+  _refreshTodoList();
+  // 입력란에 포커스 유지
+  input.focus();
+};
+
+window._refreshTodoList = function() {
+  const listEl = document.getElementById('todo-list-container');
+  if (!listEl) { render(); return; }
+  const d = D();
+  const todos = getTodos();
+  const pad2 = n => String(n).padStart(2,'0');
+  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
+  const todayStr = now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-'+pad2(now.getDate());
+  const dw = ['일','월','화','수','목','금','토'];
+
+  if (!todos.length) {
+    listEl.innerHTML = `<div style="text-align:center;padding:30px 0;color:${d.sub};font-size:13px">메모가 없어요. 위에 입력해보세요!</div>`;
+    return;
+  }
+
+  const groups = {};
+  todos.forEach(t => {
+    if (!groups[t.date]) groups[t.date] = [];
+    groups[t.date].push(t);
+  });
+
+  let html = '';
+  Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(date => {
+    const [y,m,da] = date.split('-');
+    const dayObj = new Date(date+'T12:00:00');
+    const dayLabel = dw[dayObj.getDay()];
+    const isToday = date === todayStr;
+    html += `<div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700;color:${isToday?'#E31837':d.sub}">${y}.${m}.${da} (${dayLabel})</span>
+        ${isToday?`<span style="font-size:10px;background:rgba(227,24,55,0.1);color:#E31837;border-radius:4px;padding:1px 6px;font-weight:700">오늘</span>`:''}
+      </div>`;
+    groups[date].forEach(t => {
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px;margin-bottom:6px">
+        <button onclick="toggleTodo('${t.id}')"
+          style="width:22px;height:22px;border-radius:50%;border:2px solid ${t.done?'#E31837':d.bgB};
+          background:${t.done?'#E31837':'transparent'};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
+          ${t.done?'<span style="color:#fff;font-size:12px">✓</span>':''}
+        </button>
+        <span style="flex:1;font-size:13px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''};line-height:1.4">${t.text}</span>
+        <button onclick="deleteTodo('${t.id}')"
+          style="color:${d.sub};font-size:16px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1">×</button>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  listEl.innerHTML = html;
 };
 
 window.toggleTodo = function(id) {
@@ -1381,12 +1445,12 @@ window.toggleTodo = function(id) {
   const t = todos.find(t=>t.id===id);
   if (t) t.done = !t.done;
   saveTodos(todos);
-  render();
+  _refreshTodoList();
 };
 
 window.deleteTodo = function(id) {
   saveTodos(getTodos().filter(t=>t.id!==id));
-  render();
+  _refreshTodoList();
 };
 
 function renderFavs(d) {
@@ -1496,7 +1560,8 @@ function renderMyPage(d) {
   const profile = getProfile();
   const nickname = profile.nickname || '타이거즈 팬';
   const photoSrc = profile.photo || '';
-  if(!state.myTab) state.myTab = 'rank';
+  // myTab이 undefined일 때만 초기값 설정 (null은 '모두 닫힘' 상태로 허용)
+  if(state.myTab === undefined) state.myTab = 'rank';
 
   const sections = [
     {id:'rank', label:'📊 순위',   fn: renderStand},
@@ -1528,7 +1593,7 @@ function renderMyPage(d) {
   sections.forEach(s => {
     const isOpen = state.myTab === s.id;
     html += `<div style="${cardStyle};margin-bottom:10px;overflow:hidden;${isOpen?'border-color:#E31837;':''}" >`;
-    html += `<button onclick="state.myTab=state.myTab==='${s.id}'?null:'${s.id}';render();window.scrollTo({top:0,behavior:'instant'})" style="width:100%;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif">`;
+    html += `<button onclick="state.myTab=state.myTab==='${s.id}'?null:'${s.id}';render();window.scrollTo({top:0,behavior:'instant'})" style="width:100%;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;min-height:${isOpen?'auto':'96px'}">`;
     html += `<span style="font-size:15px;font-weight:800;color:${isOpen?'#E31837':d.text}">${s.label}</span>`;
     html += `<span style="font-size:13px;color:${isOpen?'#E31837':d.sub}">${isOpen?'▲':'▼'}</span>`;
     html += `</button>`;
@@ -1563,12 +1628,26 @@ async function fetchStanding() {
   }
 }
 
+// 2026 KBO 시즌 하드코딩 순위 (API 실패 시 폴백)
+const KBO_2026_FALLBACK = [
+  {rank:1, tkey:'한화', win:2, lose:0, draw:0, pct:'1.000', gb:'0'},
+  {rank:1, tkey:'SSG', win:2, lose:0, draw:0, pct:'1.000', gb:'0'},
+  {rank:1, tkey:'KT', win:2, lose:0, draw:0, pct:'1.000', gb:'0'},
+  {rank:1, tkey:'롯데', win:2, lose:0, draw:0, pct:'1.000', gb:'0'},
+  {rank:5, tkey:'NC', win:1, lose:1, draw:0, pct:'0.500', gb:'1'},
+  {rank:5, tkey:'두산', win:1, lose:1, draw:0, pct:'0.500', gb:'1'},
+  {rank:7, tkey:'LG', win:0, lose:2, draw:0, pct:'0.000', gb:'2'},
+  {rank:7, tkey:'삼성', win:0, lose:2, draw:0, pct:'0.000', gb:'2'},
+  {rank:7, tkey:'KIA', win:0, lose:2, draw:0, pct:'0.000', gb:'2'},
+  {rank:7, tkey:'키움', win:0, lose:2, draw:0, pct:'0.000', gb:'2'},
+];
+
 function renderStand(d) {
   // 캐시된 순위가 있으면 바로 표시, 없으면 fetch 후 리렌더
   if (!_standCache) {
     fetchStanding().then(r => { if(r) render(); });
-    // 로딩 중 → STAND(작년) 임시 표시
-    return `<div style="text-align:center;padding:20px;color:${d.sub};font-size:13px">⏳ 순위 불러오는 중...</div>`;
+    // 로딩 중 → 하드코딩된 최신 순위 임시 표시
+    return renderStandRows(d, KBO_2026_FALLBACK, '2026.03.29 기준 (업데이트 중...)');
   }
 
   const TCODE = {'HT':'KIA','KT':'KT','LG':'LG','SK':'SSG','NC':'NC','OB':'두산','LT':'롯데','SS':'삼성','HH':'한화','WO':'키움'};
@@ -1580,16 +1659,18 @@ function renderStand(d) {
     const draw = t.drawn ?? t.d ?? 0;
     const pct = t.wra ?? t.gameRate ?? (win+lose>0 ? (win/(win+lose)).toFixed(3) : '-');
     const gb = t.gamesBehind ?? t.gb ?? '';
-    const streak = t.lastTenResult || t.streak || '';
-    return { rank:i+1, tkey, win, lose, draw, pct, gb, streak };
+    return { rank:i+1, tkey, win, lose, draw, pct, gb };
   });
 
   const updTime = new Date(_standCacheTime).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  return renderStandRows(d, rows, '업데이트 '+updTime);
+}
 
+function renderStandRows(d, rows, footerLabel) {
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:${d.sub}">2026 KBO 실시간 순위</div>
-      <button onclick="fetchStanding().then(r=>{if(r){render();}});return false" style="font-size:10px;color:#E31837;border:1px solid rgba(227,24,55,0.3);border-radius:6px;padding:2px 8px;background:transparent;cursor:pointer">새로고침</button>
+      <button onclick="_standCache=null;fetchStanding().then(r=>{if(r){render();}});return false" style="font-size:10px;color:#E31837;border:1px solid rgba(227,24,55,0.3);border-radius:6px;padding:2px 8px;background:transparent;cursor:pointer">새로고침</button>
     </div>
     <div style="background:${d.bg};border:1px solid ${d.cardB};border-radius:14px;overflow:hidden">
       <div style="display:grid;grid-template-columns:24px 1fr 28px 28px 28px 42px;padding:8px 12px;border-bottom:1px solid ${d.cardB};font-size:9px;font-weight:700;color:${d.sub};letter-spacing:0.05em">
@@ -1608,7 +1689,7 @@ function renderStand(d) {
           <span style="font-size:11px;text-align:right;color:${d.sub}">${typeof row.pct==='number'?row.pct.toFixed(3):row.pct}</span>
         </div>`).join('')}
     </div>
-    <div style="font-size:10px;color:${d.muted};text-align:right;margin-top:6px">업데이트 ${updTime}</div>
+    <div style="font-size:10px;color:${d.muted};text-align:right;margin-top:6px">${footerLabel}</div>
   `;
 }
 
@@ -1967,7 +2048,7 @@ function renderModal(d) {
             return `<button onclick="saveMemoField('watch','${v}')" style="flex:1;padding:7px 0;background:${sel?'#E31837':'transparent'};border:1.5px solid ${sel?'#E31837':d.bgB};color:${sel?'#fff':d.sub};border-radius:8px;font-size:12px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${v==='직관'?'⚾ 직관':v==='집관'?'📺 집관':'— 미시청'}</button>`;
           }).join('')}
         </div>
-        <textarea id="memo-input" placeholder="이 경기에 대한 생각이나 메모를 남겨보세요 ✍️" style="width:100%;min-height:90px;padding:12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;color:${d.text};font-size:13px;line-height:1.6;resize:none">${memoData.text||''}</textarea>
+        <textarea id="memo-input" placeholder="이 경기에 대한 생각이나 메모를 남겨보세요 ✍️" style="width:100%;min-height:90px;padding:12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;color:${d.text};font-size:13px;line-height:1.6;resize:none;-webkit-user-select:text;user-select:text">${memoData.text||''}</textarea>
         <div style="margin-top:8px">
           <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px">
             <span style="font-size:13px">📷</span>
@@ -2024,7 +2105,8 @@ function renderModal(d) {
     if(val===null) delete data[field]; else data[field]=val;
     if(field==='text') data.text=document.getElementById('memo-input')?.value||'';
     saveMemoData(data);
-    renderModal(D());
+    // text 필드 저장 시는 renderModal 호출 안 함 (포커스 유지)
+    if(field !== 'text') renderModal(D());
   };
   window.saveMemoPhoto = function(input) {
     if(!input||!input.files||!input.files[0]) return;
@@ -2215,7 +2297,17 @@ document.getElementById('modal-overlay').addEventListener('click',e=>{
 });
 window.addEventListener('popstate',()=>{if(state.modalGame)closeModal();});
 
-setInterval(()=>{state.clock=new Date();render();},1000);
+setInterval(()=>{
+  state.clock=new Date();
+  // 포커스된 input/textarea가 있으면 헤더만 업데이트 (메모 입력 중 화면 재렌더 방지)
+  const focused = document.activeElement;
+  const isTyping = focused && (focused.tagName === 'TEXTAREA' || focused.tagName === 'INPUT') && !focused.readOnly;
+  if(isTyping) {
+    renderHeader(D());
+  } else {
+    render();
+  }
+},1000);
 
 
 
