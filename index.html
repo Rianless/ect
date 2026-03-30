@@ -1983,15 +1983,12 @@ function renderModal(d) {
         </div>
       </div>`:''}
       <div style="margin-bottom:18px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <!-- ── 경기 상황 섹션 (다이아몬드) ── -->
+        <div style="display:flex;align-items:center;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">🧢</span>
-            <span style="font-size:13px;font-weight:800;color:${d.text}">${isLive?'실시간 경기 상황':isFinal?'라인업':'선발 라인업'}</span>
+            <span style="font-size:13px;font-weight:800;color:${d.text}">${isLive?'실시간 경기 상황':isFinal?'경기 상황':'경기 상황'}</span>
           </div>
-          ${hasLU?`<div style="display:flex;gap:4px">
-            <button onclick="setModalLt('away')" style="padding:4px 10px;background:${lt==='away'?aw.color:d.bg};border:1px solid ${lt==='away'?aw.color:d.bgB};border-radius:8px;color:${lt==='away'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.away}</button>
-            <button onclick="setModalLt('home')" style="padding:4px 10px;background:${lt==='home'?hw.color:d.bg};border:1px solid ${lt==='home'?hw.color:d.bgB};border-radius:8px;color:${lt==='home'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.home}</button>
-          </div>`:''}
         </div>
         ${!hasLU?`<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
           <div style="font-size:24px;margin-bottom:6px">${(isLive||isFinal)?'⏳':'📋'}</div>
@@ -2180,35 +2177,46 @@ function renderModal(d) {
 
             return `<div style="padding:10px 10px 0">${diamond}</div>${countHtml}`;
           })()}
-          <!-- 타순 그리드 -->
+        </div>`}
+      </div>
+
+      <!-- ── 라인업 섹션 (타순 그리드) ── -->
+      ${hasLU ? `<div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:15px">🧢</span>
+            <span style="font-size:13px;font-weight:800;color:${d.text}">라인업</span>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button onclick="setModalLt('away')" style="padding:4px 10px;background:${lt==='away'?aw.color:d.bg};border:1px solid ${lt==='away'?aw.color:d.bgB};border-radius:8px;color:${lt==='away'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.away}</button>
+            <button onclick="setModalLt('home')" style="padding:4px 10px;background:${lt==='home'?hw.color:d.bg};border:1px solid ${lt==='home'?hw.color:d.bgB};border-radius:8px;color:${lt==='home'?'#fff':d.text};font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${g.home}</button>
+          </div>
+        </div>
+        <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;overflow:hidden">
           <div style="padding:10px">
             <div style="font-size:10px;font-weight:700;color:${d.sub};margin-bottom:6px;padding-left:2px">타 순 · ${ct.name||''}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
               ${(()=>{
-                // 9명 타자 카드 (투수 제외)
                 const batterCards = cur.filter(p => p.p !== 'P').slice(0,9);
-                // 선발/현재 투수 이름
                 const pitcherName = lt==='away' ? (g.awayStarter||g.awayPitcher||'-') : (g.homeStarter||g.homePitcher||'-');
                 const cards = batterCards.map((p,idx) =>
-                  `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;background:${d.bg};border:1px solid ${d.bgB}">
+                  `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;background:${d.card||d.bg};border:1px solid ${d.bgB}">
                     <span style="font-size:11px;font-weight:900;min-width:16px;text-align:center;color:${ct.color}">${p.n}</span>
                     <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.sub ? `${p.name} ← ${p.sub}` : p.name}</span>
                     <span style="font-size:10px;color:${d.sub};flex-shrink:0">${p.p}</span>
                   </div>`
                 );
-                // 투수 카드 (10번째 칸)
                 const pitcherCard = `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;background:${ct.color}18;border:1.5px solid ${ct.color}55">
                   <span style="font-size:9px;font-weight:900;min-width:16px;text-align:center;color:${ct.color};background:${ct.color}22;border-radius:4px;padding:1px 3px">P</span>
                   <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pitcherName}</span>
                   <span style="font-size:10px;color:${ct.color};font-weight:700;flex-shrink:0">P</span>
                 </div>`;
-                // 9명이 홀수 위치에 있으면 투수 카드는 짝수 칸에 들어가 자연스럽게 2열 그리드 완성
                 return [...cards, pitcherCard].join('');
               })()}
             </div>
           </div>
-        </div>`}
-      </div>
+        </div>
+      </div>` : ''}
       <div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:6px">
