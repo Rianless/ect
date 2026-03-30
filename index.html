@@ -787,10 +787,13 @@ const dim = (y,m) => new Date(y,m,0).getDate();
 const fdow = (y,m) => new Date(y,m-1,1).getDay();
 const logo = (team,size) => { const t=T[team]; if(!t) return ''; return `<img src="${t.img}" style="width:${size}px;height:${size}px;object-fit:contain" onerror="this.style.display='none'">`; };
 const normalizePositionLabel = pos => {
+  // 비필드 포지션(대주자/대타/주자 등)은 빈 문자열로 반환 → buildDisplayLineup에서 starterPos로 폴백
+  const nonField = new Set(['대주자','대타','주자','대주자/대타','대타/대주자']);
+  if (nonField.has(pos)) return '';
   const map = {
-    '\uC911\uACAC\uC218':'CF','\uC88C\uC775\uC218':'LF','\uC6B0\uC775\uC218':'RF','\uC720\uACA9\uC218':'SS',
-    '2\uB8E8\uC218':'2B','1\uB8E8\uC218':'1B','3\uB8E8\uC218':'3B','\uD3EC\uC218':'C',
-    '\uD22C\uC218':'P','\uC9C0\uBA85\uD0C0\uC790':'DH',
+    '중간수':'CF','좌익수':'LF','우익수':'RF','유격수':'SS',
+    '2루수':'2B','1루수':'1B','3루수':'3B','포수':'C',
+    '투수':'P','지명타자':'DH',
     CF:'CF', LF:'LF', RF:'RF', SS:'SS', '2B':'2B', '1B':'1B', '3B':'3B', C:'C', P:'P', DH:'DH'
   };
   return map[pos] || pos || '';
@@ -2560,7 +2563,15 @@ setInterval(()=>{
     const cache = JSON.parse(localStorage.getItem('kbo_game_cache') || '{}');
     Object.entries(cache).forEach(([key, data]) => {
       const idx = SCH.findIndex(s => s.date+'_'+s.away+'_'+s.home === key);
-      if (idx !== -1) Object.assign(SCH[idx], data);
+      if (idx === -1) return;
+      // lineup이 있으면 starterPos 포함 여부 확인 (구버전 캐시는 lineup 제외)
+      const dataToApply = {...data};
+      if (dataToApply.lineup) {
+        const checkBatters = (batters) => (batters||[]).some(b => b.starterPos);
+        const hasStarterPos = checkBatters(dataToApply.lineup?.home?.batters) || checkBatters(dataToApply.lineup?.away?.batters);
+        if (!hasStarterPos) delete dataToApply.lineup; // 구버전 lineup은 신규 fetch로 덮어쓰기
+      }
+      Object.assign(SCH[idx], dataToApply);
     });
   } catch(e) {}
 })();
