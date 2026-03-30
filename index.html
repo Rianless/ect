@@ -2428,9 +2428,10 @@ async function fetchLineupDirect(gameId, inning) {
       arr.forEach(p => { if (!om[p.batOrder]) om[p.batOrder] = []; om[p.batOrder].push(p); });
       return Object.entries(om).sort(([a],[b])=>+a-+b).map(([o,ps]) => {
         const cur = ps.find(p=>p.cin==='true') || ps.find(p=>!p.cout) || ps[ps.length-1];
-        const prev = ps.find(p=>p.cout==='true' && p!==cur);
-        const starter = ps[0];
-        return { n:+o, order:+o, name:cur.name, p:cur.posName||'', pos:cur.posName||'', sub:prev?.name||null, starterName:starter?.name||cur.name, starterPos:starter?.posName||cur.posName||'', hit:cur.hit||0, ab:cur.ab||0, rbi:cur.rbi||0 };
+        // cout=true인 선수(교체된 선발)가 있으면 그 선수의 포지션을 starterPos로 사용
+        const replaced = ps.find(p=>p.cout==='true' && p!==cur);
+        const starterForPos = replaced || cur;
+        return { n:+o, order:+o, name:cur.name, p:cur.posName||'', pos:cur.posName||'', sub:replaced?.name||null, starterName:starterForPos?.name||cur.name, starterPos:starterForPos?.posName||cur.posName||'', hit:cur.hit||0, ab:cur.ab||0, rbi:cur.rbi||0 };
       });
     };
     const parsePitchers = (arr) => (arr||[]).map(p=>({ seqno:p.seqno, name:p.name, inn:p.inn||'0', er:p.er||0, kk:p.kk||0 }));
@@ -2610,18 +2611,19 @@ function parseBrowserBatters(batters) {
   return Object.entries(orderMap)
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([order, players]) => {
-      const starter = players[0];
       const current = players.find(p => p.cin === 'true') || players.find(p => !p.cout) || players[players.length - 1];
-      const prev = players.find(p => p.cout === 'true' && p !== current);
+      // cout=true인 선수(교체된 선발)가 있으면 그 선수의 포지션을 starterPos로 사용
+      const replaced = players.find(p => p.cout === 'true' && p !== current);
+      const starterForPos = replaced || current; // 교체된 선수가 없으면 현재 선수 자체
       return {
         n: Number(order),
         order: Number(order),
         name: current?.name || '',
         p: current?.posName || '',
         pos: current?.posName || '',
-        sub: prev?.name || null,
-        starterName: starter?.name || current?.name || '',
-        starterPos: starter?.posName || current?.posName || '',
+        sub: replaced?.name || null,
+        starterName: starterForPos?.name || current?.name || '',
+        starterPos: starterForPos?.posName || current?.posName || '',
         hit: current?.hit || 0,
         ab: current?.ab || 0,
         rbi: current?.rbi || 0,
