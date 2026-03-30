@@ -2026,11 +2026,11 @@ function renderModal(d) {
 
             // currentGameState에서 타자/투수 이름 추출
             const cgs = g.currentGameState;
-            const batterNameCgs = cgs?.batter?.name || cgs?.batterName || '';
-            const pitcherNameCgs = cgs?.pitcher?.name || cgs?.pitcherName || (defIsHome ? (g.homePitcher||g.homeStarter||'') : (g.awayPitcher||g.awayStarter||'')) || '';
-            const base1Runner = cgs?.base1Runner?.name || cgs?.base1RunnerName || (base1?'주자':'');
-            const base2Runner = cgs?.base2Runner?.name || cgs?.base2RunnerName || (base2?'주자':'');
-            const base3Runner = cgs?.base3Runner?.name || cgs?.base3RunnerName || (base3?'주자':'');
+            const batterNameCgs = cgs?.batterName || cgs?.batter?.name || '';
+            const pitcherNameCgs = cgs?.pitcherName || cgs?.pitcher?.name || (defIsHome ? (g.homePitcher||g.homeStarter||'') : (g.awayPitcher||g.awayStarter||'')) || '';
+            const base1Runner = cgs?.base1Name || cgs?.base1Runner?.name || (base1?'주자':'');
+            const base2Runner = cgs?.base2Name || cgs?.base2Runner?.name || (base2?'주자':'');
+            const base3Runner = cgs?.base3Name || cgs?.base3Runner?.name || (base3?'주자':'');
 
             // 포지션 코드 맵
             const posMap = {
@@ -2457,10 +2457,47 @@ async function fetchLineupDirect(gameId, inning) {
 
     if (!homeL && !awayL) return gs ? { currentGameState: gs } : null;
 
+    // pcode -> name 맵 생성
+    const pcodeMap = {};
+    [...(homeL?.batter||[]), ...(homeL?.pitcher||[]), ...(awayL?.batter||[]), ...(awayL?.pitcher||[])]
+      .forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name; });
+    // 타순 -> 현재 선수 이름 맵
+    const buildOrderMap = (batters) => {
+      const om = {};
+      (batters||[]).forEach(p => { if(!om[p.batOrder]) om[p.batOrder]=[]; om[p.batOrder].push(p); });
+      const res = {};
+      Object.entries(om).forEach(([o,ps]) => {
+        const cur = ps.find(p=>p.cin==='true') || ps[ps.length-1];
+        res[o] = cur.name;
+      });
+      return res;
+    };
+    const homeOrderMap = buildOrderMap(homeL?.batter);
+    const awayOrderMap = buildOrderMap(awayL?.batter);
+
+    // currentGameState에 이름 변환 추가
+    let enrichedGs = gs || null;
+    if (gs) {
+      // 이닝 초/말 판별: 초=away 공격, 말=home 공격
+      const g = state.modalGame;
+      const info = g?.inningInfo || '';
+      const isTop = info.includes('초');
+      const atkOrderMap = isTop ? awayOrderMap : homeOrderMap;
+      const baseToName = (val) => (!val || val==='0') ? null : (atkOrderMap[val] || null);
+      enrichedGs = {
+        ...gs,
+        pitcherName: pcodeMap[gs.pitcher] || null,
+        batterName: pcodeMap[gs.batter] || null,
+        base1Name: baseToName(gs.base1),
+        base2Name: baseToName(gs.base2),
+        base3Name: baseToName(gs.base3),
+      };
+    }
+
     return {
       home: { batters: parseBatters(homeL?.batter), pitchers: parsePitchers(homeL?.pitcher) },
       away: { batters: parseBatters(awayL?.batter), pitchers: parsePitchers(awayL?.pitcher) },
-      currentGameState: gs || null,
+      currentGameState: enrichedGs,
     };
   } catch(e) { return null; }
 }
