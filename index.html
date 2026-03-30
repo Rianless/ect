@@ -920,15 +920,19 @@ function renderCalSplit(d) {
       const scoreHtml = (isLive||isFinal)?
         `<div style="font-size:18px;font-weight:900;color:${d.text}">${kiaHome?(g.homeScore??0):(g.awayScore??0)} <span style="font-size:12px;color:${d.sub}">:</span> ${kiaHome?(g.awayScore??0):(g.homeScore??0)}</div>`:
         `<div style="font-size:12px;font-weight:800;color:#FFB300">VS</div>`;
+      const cardMemoKey2 = 'm_'+g.date+'_'+g.away+'_'+g.home;
+      let cardMemo2 = {};
+      try { cardMemo2 = JSON.parse(localStorage.getItem(cardMemoKey2)||'{}'); if(typeof cardMemo2==='string') cardMemo2={}; } catch(e) {}
       return `<div class="card${isKia?' kia':''}" onclick="openModal(${i},'${sel}')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="display:flex;align-items:center;gap:5px">
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
             <button onclick="event.stopPropagation();toggleFavByKey('${g.date}','${g.away}','${g.home}')" style="font-size:16px;line-height:1;padding:0 2px">${isFav(g)?'⭐':'☆'}</button>
             ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;animation:fadeIn 0.5s infinite alternate">🔴 LIVE</span>`:
               isFinal?`<span style="font-size:9px;background:rgba(0,0,0,0.25);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">종료</span>`:
               `<span style="font-size:11px;font-weight:700;color:#FFB300">${g.time} 시작</span>`}
             ${isKia?`<span class="tag-kia">🐯 KIA</span>`:''}
             ${formatInningBadge(g)?`<span class="tag-lu">${formatInningBadge(g)}</span>`:''}
+            ${cardMemo2.watch?`<span style="font-size:9px;font-weight:700;background:${cardMemo2.watch==='직관'?'rgba(227,24,55,0.1)':'rgba(0,120,255,0.1)'};color:${cardMemo2.watch==='직관'?'#E31837':'#0078ff'};border-radius:4px;padding:1px 5px">${cardMemo2.watch==='직관'?'⚾직관':'📺집관'}</span>`:''}
           </div>
           <span style="font-size:10px;color:${d.sub}">📍${g.stad} ›</span>
         </div>
@@ -949,6 +953,7 @@ function renderCalSplit(d) {
             </div>
           </div>
         </div>
+        ${cardMemo2.photo?`<img src="${cardMemo2.photo}" style="width:100%;border-radius:8px;margin-top:8px;max-height:100px;object-fit:cover"/>`:''}
       </div>`;
     }).join('');
   }
