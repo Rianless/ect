@@ -1136,35 +1136,58 @@ function renderBaseballRecord(d) {
     html += '</div>';
     html += '</div>'; // 하단 스코어 끝
 
-    // ── 메모 영역 (직관/집관 있을 때만 구분선 + 표시) ──
-    const hasMemo = memoData.watch || memoData.photo || memoData.text;
-    if (hasMemo) {
-      html += '<div style="border-top:1px solid '+d.bgB+';margin:0 20px;padding:12px 0 4px">';
-      if(memoData.watch) {
-        const watchColor = memoData.watch==='직관'?'#E31837':'#0078ff';
-        const watchBg = memoData.watch==='직관'?'rgba(227,24,55,0.08)':'rgba(0,120,255,0.08)';
-        html += '<span style="font-size:11px;font-weight:700;background:'+watchBg+';color:'+watchColor+';border-radius:6px;padding:3px 10px;display:inline-block;margin-bottom:6px">'+(memoData.watch==='직관'?'⚾ 직관':'📺 집관')+'</span>';
-      }
-      if(memoData.photo) {
-        html += '<img src="'+memoData.photo+'" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:130px;object-fit:cover"/>';
-      }
-      if(memoData.text) {
-        html += '<div style="font-size:12px;color:'+d.sub+';line-height:1.6;white-space:pre-wrap">'+memoData.text+'</div>';
-      }
+    // ── 메모 영역 ──
+    const memoId = 'rec-memo-'+g.date+'-'+g.away+'-'+g.home;
+    const safeD = g.date, safeA = g.away, safeH = g.home;
+
+    html += '<div style="border-top:1px solid '+d.bgB+';padding:14px 20px 18px" onclick="event.stopPropagation()">';
+
+    // 직관/집관/미시청 버튼
+    html += '<div style="display:flex;gap:6px;margin-bottom:10px">';
+    ['직관','집관','미시청'].forEach(function(v) {
+      const sel = (memoData.watch||'') === v;
+      const vc = v==='직관'?'#E31837':v==='집관'?'#0078ff':'rgba(0,0,0,0.3)';
+      html += '<button onclick="event.stopPropagation();recSetWatch(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\',\''+v+'\')" '
+        + 'id="recwatch-'+memoId+'-'+v+'" '
+        + 'style="flex:1;padding:7px 0;background:'+(sel?vc:'transparent')+';border:1.5px solid '+vc+';border-radius:8px;'
+        + 'font-size:11px;font-weight:700;color:'+(sel?'#fff':vc)+';font-family:\'Noto Sans KR\',sans-serif;cursor:pointer">'
+        + (v==='직관'?'⚾ 직관':v==='집관'?'📺 집관':'— 미시청')
+        + '</button>';
+    });
+    html += '</div>';
+
+    // 사진 (전체 높이, 잘리지 않음)
+    if(memoData.photo) {
+      html += '<div style="position:relative;margin-bottom:10px">';
+      html += '<img src="'+memoData.photo+'" style="width:100%;border-radius:12px;display:block"/>';
+      html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\')" '
+        + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
+        + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>';
       html += '</div>';
     }
 
-    // 메모 입력 (숨겨진 영역 - 클릭하면 모달에서 입력)
-    html += '<div style="padding:0 20px 16px">';
-    const memoId = 'rec-memo-'+g.date+'-'+g.away+'-'+g.home;
-    html += '<textarea id="'+memoId+'" placeholder="탭해서 메모 남기기... ✍️" '
-      + 'onclick="event.stopPropagation()" '
-      + 'data-date="'+g.date+'" data-away="'+g.away+'" data-home="'+g.home+'" '
-      + 'onchange="saveRecordMemoEl(this)" '
-      + 'style="width:100%;min-height:40px;padding:8px 10px;background:'+d.bg+';border:1px solid '+d.bgB+';border-radius:10px;color:'+d.text+';font-size:12px;line-height:1.6;resize:none;box-sizing:border-box">'
+    // 텍스트 메모 textarea (oninput → 즉시 저장)
+    html += '<textarea id="'+memoId+'" '
+      + 'data-date="'+safeD+'" data-away="'+safeA+'" data-home="'+safeH+'" '
+      + 'placeholder="메모를 남겨보세요... ✍️" '
+      + 'oninput="saveRecordMemoEl(this)" '
+      + 'style="width:100%;min-height:60px;padding:10px;background:'+d.bg+';border:1px solid '+d.bgB+';'
+      + 'border-radius:10px;color:'+d.text+';font-size:12px;line-height:1.6;resize:none;box-sizing:border-box;'
+      + 'font-family:\'Noto Sans KR\',sans-serif;margin-bottom:8px">'
       + (memoData.text||'')+'</textarea>';
-    html += '</div>';
 
+    // 사진 추가 버튼
+    html += '<label onclick="event.stopPropagation()" '
+      + 'style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:'+d.bg+';border:1px solid '+d.bgB+';'
+      + 'border-radius:10px;cursor:pointer">';
+    html += '<span style="font-size:15px">📷</span>';
+    html += '<span style="font-size:12px;color:'+d.sub+';flex:1">사진 추가</span>';
+    html += '<input type="file" accept="image/*" style="display:none" '
+      + 'onchange="event.stopPropagation();recUploadPhoto(this,\''+safeD+'\',\''+safeA+'\',\''+safeH+'\')">';
+    html += '<span style="font-size:11px;color:#E31837;font-weight:700;border:1px solid #E31837;border-radius:6px;padding:3px 8px">선택</span>';
+    html += '</label>';
+
+    html += '</div>'; // 메모 영역 끝
     html += '</div>'; // 티켓 전체 끝
   });
 
@@ -1178,6 +1201,49 @@ window.saveRecordMemoEl = function(el) {
   try { data = JSON.parse(localStorage.getItem(key)||'{}'); if(typeof data==='string') data={text:data}; } catch(e) {}
   data.text = el.value;
   localStorage.setItem(key, JSON.stringify(data));
+};
+
+function _recGetMemo(date, away, home) {
+  const key = 'm_'+date+'_'+away+'_'+home;
+  try { const d = JSON.parse(localStorage.getItem(key)||'{}'); return typeof d==='string'?{text:d}:d; } catch(e) { return {}; }
+}
+function _recSaveMemo(date, away, home, data) {
+  localStorage.setItem('m_'+date+'_'+away+'_'+home, JSON.stringify(data));
+}
+
+window.recSetWatch = function(date, away, home, v) {
+  const data = _recGetMemo(date, away, home);
+  data.watch = data.watch === v ? '' : v;
+  _recSaveMemo(date, away, home, data);
+  // 버튼 색상 즉시 갱신
+  const memoId = 'rec-memo-'+date+'-'+away+'-'+home;
+  ['직관','집관','미시청'].forEach(function(lv) {
+    const btn = document.getElementById('recwatch-'+memoId+'-'+lv);
+    if (!btn) return;
+    const vc = lv==='직관'?'#E31837':lv==='집관'?'#0078ff':'rgba(0,0,0,0.3)';
+    const sel = data.watch === lv;
+    btn.style.background = sel ? vc : 'transparent';
+    btn.style.color = sel ? '#fff' : vc;
+  });
+};
+
+window.recDeletePhoto = function(date, away, home) {
+  const data = _recGetMemo(date, away, home);
+  delete data.photo;
+  _recSaveMemo(date, away, home, data);
+  render();
+};
+
+window.recUploadPhoto = function(input, date, away, home) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const data = _recGetMemo(date, away, home);
+    data.photo = e.target.result;
+    _recSaveMemo(date, away, home, data);
+    render();
+  };
+  reader.readAsDataURL(input.files[0]);
 };
 
 function renderMemos(d) {
