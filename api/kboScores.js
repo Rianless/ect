@@ -134,6 +134,30 @@ export default async function handler(req, res) {
 
     if (!home && !away) return null;
 
+    // pcode -> name 맵 생성 (타자 + 투수 전체)
+    const pcodeMap = {};
+    const orderMapHome = {}; // 타순 -> 현재 선수 이름 (home)
+    const orderMapAway = {}; // 타순 -> 현재 선수 이름 (away)
+    [...(home?.batter||[]), ...(home?.pitcher||[])].forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name; });
+    [...(away?.batter||[]), ...(away?.pitcher||[])].forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name; });
+    // 타순 -> 현재 선수 맵 (cin=true 우선)
+    const buildOrderMap = (batters) => {
+      const om = {};
+      (batters||[]).forEach(p => {
+        const o = p.batOrder;
+        if (!om[o]) om[o] = [];
+        om[o].push(p);
+      });
+      const result = {};
+      Object.entries(om).forEach(([o, ps]) => {
+        const cur = ps.find(p=>p.cin==='true') || ps[ps.length-1];
+        result[o] = cur.name;
+      });
+      return result;
+    };
+    const homeOrderMap = buildOrderMap(home?.batter);
+    const awayOrderMap = buildOrderMap(away?.batter);
+
     return {
       home: {
         batters: parseBatters(home?.batter),
@@ -143,6 +167,9 @@ export default async function handler(req, res) {
         batters: parseBatters(away?.batter),
         pitchers: parsePitchers(away?.pitcher),
       },
+      pcodeMap,
+      homeOrderMap,
+      awayOrderMap,
     };
   }
 
@@ -199,7 +226,29 @@ export default async function handler(req, res) {
       homeBallFour: g.homeTeamRheb?.[3] ?? gameData.homeTeamBallFour ?? g.homeTeamBallFour ?? null,
       broadChannel: g.broadChannel || null,
       lineup: buildLineup(detail),
-      currentGameState: detail?.textRelayData?.currentGameState || detail?.currentGameState || null,
+      currentGameState: (() => {
+        const cgs = detail?.textRelayData?.currentGameState || detail?.currentGameState || null;
+        if (!cgs) return null;
+        const lu = buildLineup(detail);
+        const pcodeMap = lu?.pcodeMap || {};
+        // 이닝 초/말 판별: 초=away 공격(home 수비), 말=home 공격(away 수비)
+        const info = g.statusInfo || '';
+        const isTop = info.includes('초'); // 초=away 공격
+        const atkOrderMap = isTop ? (lu?.awayOrderMap || {}) : (lu?.homeOrderMap || {});
+        // base1/2/3: 타순 번호 -> 공격팀 선수 이름
+        const baseToName = (val) => {
+          if (!val || val === '0') return null;
+          return atkOrderMap[val] || null;
+        };
+        return {
+          ...cgs,
+          pitcherName: pcodeMap[cgs.pitcher] || null,
+          batterName: pcodeMap[cgs.batter] || null,
+          base1Name: baseToName(cgs.base1),
+          base2Name: baseToName(cgs.base2),
+          base3Name: baseToName(cgs.base3),
+        };
+      })(),
       gameId: String(g.gameId || ''),
     };
   }
