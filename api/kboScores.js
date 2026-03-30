@@ -94,9 +94,10 @@ export default async function handler(req, res) {
     return Object.entries(orderMap)
       .sort(([a],[b]) => Number(a)-Number(b))
       .map(([order, players]) => {
-        const starter = players[0];
         const current = players.find(p => p.cin==='true') || players.find(p => !p.cout) || players[players.length-1];
-        const prev = players.find(p => p.cout==='true' && p !== current);
+        // cout=true인 선수(교체된 선발)가 있으면 그 선수의 포지션을 starterPos로 사용
+        const replaced = players.find(p => p.cout==='true' && p !== current);
+        const starterForPos = replaced || current;
         return {
           order: Number(order),
           name: current.name,
@@ -104,9 +105,9 @@ export default async function handler(req, res) {
           hit: current.hit || 0,
           ab: current.ab || 0,
           rbi: current.rbi || 0,
-          sub: prev?.name || null,
-          starterName: starter?.name || current.name,
-          starterPos: starter?.posName || current.posName || '',
+          sub: replaced?.name || null,
+          starterName: starterForPos?.name || current.name,
+          starterPos: starterForPos?.posName || current.posName || '',
         };
       });
   }
