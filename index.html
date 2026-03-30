@@ -140,11 +140,11 @@ const SCH = [
   {date:"2026-04-10",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"18:30"},
   {date:"2026-04-10",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
   {date:"2026-04-10",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"18:30"},
-  {date:"2026-04-11",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"17:00"},
-  {date:"2026-04-11",away:"SSG",home:"LG",stad:"잠실",time:"17:00"},
-  {date:"2026-04-11",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"17:00"},
-  {date:"2026-04-11",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"17:00"},
-  {date:"2026-04-11",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"17:00"},
+  {date:"2026-04-11",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"14:00"},
+  {date:"2026-04-11",away:"SSG",home:"LG",stad:"잠실",time:"14:00"},
+  {date:"2026-04-11",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"14:00"},
+  {date:"2026-04-11",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"14:00"},
+  {date:"2026-04-11",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"14:00"},
   {date:"2026-04-12",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"14:00"},
   {date:"2026-04-12",away:"SSG",home:"LG",stad:"잠실",time:"14:00"},
   {date:"2026-04-12",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"14:00"},
@@ -1156,13 +1156,18 @@ function renderBaseballRecord(d) {
     });
     html += '</div>';
 
-    // 사진 (전체 높이, 잘리지 않음)
-    if(memoData.photo) {
-      html += '<div style="position:relative;margin-bottom:10px">';
-      html += '<img src="'+memoData.photo+'" style="width:100%;border-radius:12px;display:block"/>';
-      html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\')" '
-        + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
-        + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>';
+    // 사진 미리보기 (여러 장, 작은 썸네일)
+    const recPhotos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
+    if(recPhotos.length > 0) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+      recPhotos.forEach(function(src, pi) {
+        html += '<div style="position:relative;width:72px;height:72px;flex-shrink:0">';
+        html += '<img src="'+src+'" style="width:72px;height:72px;border-radius:8px;object-fit:cover;display:block"/>';
+        html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\','+pi+')" '
+          + 'style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;'
+          + 'width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>';
+        html += '</div>';
+      });
       html += '</div>';
     }
 
@@ -1184,7 +1189,7 @@ function renderBaseballRecord(d) {
       + 'border-radius:10px;cursor:pointer">';
     html += '<span style="font-size:15px">📷</span>';
     html += '<span style="font-size:12px;color:'+d.sub+';flex:1">사진 추가</span>';
-    html += '<input type="file" accept="image/*" style="display:none" '
+    html += '<input type="file" accept="image/*" multiple style="display:none" '
       + 'onchange="event.stopPropagation();recUploadPhoto(this,\''+safeD+'\',\''+safeA+'\',\''+safeH+'\')">';
     html += '<span style="font-size:11px;color:#E31837;font-weight:700;border:1px solid #E31837;border-radius:6px;padding:3px 8px">선택</span>';
     html += '</label>';
@@ -1229,24 +1234,63 @@ window.recSetWatch = function(date, away, home, v) {
   });
 };
 
-window.recDeletePhoto = function(date, away, home) {
+window.recDeletePhoto = function(date, away, home, idx) {
   const data = _recGetMemo(date, away, home);
+  const photos = data.photos || (data.photo ? [data.photo] : []);
+  photos.splice(idx, 1);
+  data.photos = photos;
   delete data.photo;
   _recSaveMemo(date, away, home, data);
-  render();
+  // 해당 사진 컨테이너만 DOM 직접 업데이트
+  const memoId = 'rec-memo-'+date+'-'+away+'-'+home;
+  const container = document.getElementById(memoId)?.closest('.rec-photo-wrap');
+  if(container) {
+    _recRenderPhotos(container, photos, date, away, home);
+  } else {
+    render();
+  }
 };
 
 window.recUploadPhoto = function(input, date, away, home) {
-  if (!input.files || !input.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const data = _recGetMemo(date, away, home);
-    data.photo = e.target.result;
-    _recSaveMemo(date, away, home, data);
-    render();
-  };
-  reader.readAsDataURL(input.files[0]);
+  if (!input.files || !input.files.length) return;
+  const files = Array.from(input.files);
+  const oversized = files.filter(f => f.size > 5*1024*1024);
+  if(oversized.length > 0) { alert('사진 크기가 너무 커요. 5MB 이하를 선택해 주세요.'); return; }
+  let loaded = 0;
+  const results = new Array(files.length);
+  files.forEach(function(file, idx) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      results[idx] = e.target.result;
+      loaded++;
+      if(loaded === files.length) {
+        const data = _recGetMemo(date, away, home);
+        const existing = data.photos || (data.photo ? [data.photo] : []);
+        data.photos = [...existing, ...results];
+        delete data.photo;
+        _recSaveMemo(date, away, home, data);
+        render();
+        input.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  });
 };
+
+function _recRenderPhotos(container, photos, date, away, home) {
+  if(!container) return;
+  if(!photos || !photos.length) { container.innerHTML = ''; return; }
+  container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+    + photos.map(function(src, pi) {
+      return '<div style="position:relative;width:72px;height:72px;flex-shrink:0">'
+        + '<img src="'+src+'" style="width:72px;height:72px;border-radius:8px;object-fit:cover;display:block"/>'
+        + '<button onclick="event.stopPropagation();recDeletePhoto(\''+date+'\',\''+away+'\',\''+home+'\','+pi+')" '
+        + 'style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;'
+        + 'width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
+        + '</div>';
+    }).join('')
+    + '</div>';
+}
 
 function renderMemos(d) {
   const memos = [];
@@ -1936,6 +1980,14 @@ function renderModal(d) {
             // 수비 중인 팀 라인업
             const defSide = lt==='away' ? (hasLU?cur:[]) : (hasLU?cur:[]);
 
+            // currentGameState에서 타자/투수 이름 추출
+            const cgs = g.currentGameState;
+            const batterNameCgs = cgs?.batter?.name || cgs?.batterName || '';
+            const pitcherNameCgs = cgs?.pitcher?.name || cgs?.pitcherName || pitcherName || '';
+            const base1Runner = cgs?.base1Runner?.name || cgs?.base1RunnerName || (base1?'주자':'');
+            const base2Runner = cgs?.base2Runner?.name || cgs?.base2RunnerName || (base2?'주자':'');
+            const base3Runner = cgs?.base3Runner?.name || cgs?.base3RunnerName || (base3?'주자':'');
+
             // 포지션 코드 맵
             const posMap = {
               '중견수':'CF','좌익수':'LF','우익수':'RF','유격수':'SS',
@@ -1973,6 +2025,51 @@ function renderModal(d) {
             const b2c = base2 ? '#FFB300' : baseColor;
             const b3c = base3 ? '#FFB300' : baseColor;
 
+            // 타자/투수/주자 정보 표시 핀 (SVG 외부 absolute div)
+            const situationPins = [];
+            // 타자 핀 (홈플레이트 위)
+            if(batterNameCgs) {
+              situationPins.push(`<div style="position:absolute;left:50%;top:88%;transform:translate(-50%,-50%);z-index:5">
+                <div style="background:#E31837;border-radius:8px;padding:3px 8px;display:flex;align-items:center;gap:3px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+                  <span style="font-size:9px;font-weight:900;color:#fff;background:rgba(255,255,255,0.25);border-radius:3px;padding:1px 3px">타</span>
+                  <span style="font-size:11px;font-weight:700;color:#fff">${batterNameCgs}</span>
+                </div>
+              </div>`);
+            }
+            // 투수 핀 (마운드)
+            if(pitcherNameCgs) {
+              situationPins.push(`<div style="position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);z-index:5">
+                <div style="background:${ct.color};border-radius:8px;padding:3px 8px;display:flex;align-items:center;gap:3px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+                  <span style="font-size:9px;font-weight:900;color:#fff;background:rgba(255,255,255,0.25);border-radius:3px;padding:1px 3px">P</span>
+                  <span style="font-size:11px;font-weight:700;color:#fff">${pitcherNameCgs}</span>
+                </div>
+              </div>`);
+            }
+            // 주자 핀 (1루)
+            if(base1Runner && base1) {
+              situationPins.push(`<div style="position:absolute;left:75%;top:52%;transform:translate(-50%,-50%);z-index:5">
+                <div style="background:#FFB300;border-radius:6px;padding:2px 6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.35)">
+                  <span style="font-size:10px;font-weight:700;color:#000">${base1Runner}</span>
+                </div>
+              </div>`);
+            }
+            // 주자 핀 (2루)
+            if(base2Runner && base2) {
+              situationPins.push(`<div style="position:absolute;left:50%;top:20%;transform:translate(-50%,-50%);z-index:5">
+                <div style="background:#FFB300;border-radius:6px;padding:2px 6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.35)">
+                  <span style="font-size:10px;font-weight:700;color:#000">${base2Runner}</span>
+                </div>
+              </div>`);
+            }
+            // 주자 핀 (3루)
+            if(base3Runner && base3) {
+              situationPins.push(`<div style="position:absolute;left:25%;top:52%;transform:translate(-50%,-50%);z-index:5">
+                <div style="background:#FFB300;border-radius:6px;padding:2px 6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.35)">
+                  <span style="font-size:10px;font-weight:700;color:#000">${base3Runner}</span>
+                </div>
+              </div>`);
+            }
+
             const diamond = fieldPlayers.length > 0 ? `
             <div style="position:relative;width:100%;padding-bottom:85%;margin-bottom:4px">
               <svg viewBox="0 0 320 272" style="position:absolute;inset:0;width:100%;height:100%">
@@ -1995,7 +2092,22 @@ function renderModal(d) {
                 <polygon points="160,228 167,221 167,213 153,213 153,221" fill="${homeColor2}"/>
               </svg>
               ${pins}
-            </div>` : '';
+              ${situationPins.join('')}
+            </div>` : (situationPins.length > 0 ? `
+            <div style="position:relative;width:100%;padding-bottom:85%;margin-bottom:4px">
+              <svg viewBox="0 0 320 272" style="position:absolute;inset:0;width:100%;height:100%">
+                <path d="M160 248 L20 80 Q160 -15 300 80 Z" fill="${fieldBg}" stroke="${grassLine}" stroke-width="1"/>
+                <polygon points="160,60 232,140 160,220 88,140" fill="${darkBg?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.03)'}" stroke="${darkBg?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.15)'}" stroke-width="1.5"/>
+                <line x1="160" y1="220" x2="20" y2="80" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="5,5"/>
+                <line x1="160" y1="220" x2="300" y2="80" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="5,5"/>
+                <circle cx="160" cy="146" r="7" fill="rgba(180,120,60,0.35)" stroke="rgba(180,120,60,0.5)" stroke-width="1"/>
+                <rect x="${232-8}" y="${140-8}" width="16" height="16" rx="2" fill="${b1c}" transform="rotate(45,232,140)"/>
+                <rect x="${160-8}" y="${60-8}" width="16" height="16" rx="2" fill="${b2c}" transform="rotate(45,160,60)"/>
+                <rect x="${88-8}" y="${140-8}" width="16" height="16" rx="2" fill="${b3c}" transform="rotate(45,88,140)"/>
+                <polygon points="160,228 167,221 167,213 153,213 153,221" fill="${homeColor2}"/>
+              </svg>
+              ${situationPins.join('')}
+            </div>` : '');
 
             // 볼카운트 + 아웃 + 이닝
             const countHtml = (balls !== null || outs !== null) ? `
@@ -2025,11 +2137,27 @@ function renderModal(d) {
           <div style="padding:10px">
             <div style="font-size:10px;font-weight:700;color:${d.sub};margin-bottom:6px;padding-left:2px">타 순 · ${ct.name||''}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-              ${cur.map((p,idx)=>`<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;background:${d.bg};border:1px solid ${d.bgB}">
-                <span style="font-size:11px;font-weight:900;min-width:16px;text-align:center;color:${ct.color}">${p.n}</span>
-                <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.sub ? `${p.name} &larr; ${p.sub}` : p.name}</span>
-                <span style="font-size:10px;color:${d.sub};flex-shrink:0">${idx===8 ? `${p.p} / ${((lt==='away' ? (g.awayStarter || g.awayPitcher) : (g.homeStarter || g.homePitcher)) || '-')}` : p.p}</span>
-              </div>`).join('')}
+              ${(()=>{
+                // 9명 타자 카드 (투수 제외)
+                const batterCards = cur.filter(p => p.p !== 'P').slice(0,9);
+                // 선발/현재 투수 이름
+                const pitcherName = lt==='away' ? (g.awayStarter||g.awayPitcher||'-') : (g.homeStarter||g.homePitcher||'-');
+                const cards = batterCards.map((p,idx) =>
+                  `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;background:${d.bg};border:1px solid ${d.bgB}">
+                    <span style="font-size:11px;font-weight:900;min-width:16px;text-align:center;color:${ct.color}">${p.n}</span>
+                    <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.sub ? `${p.name} &larr; ${p.sub}` : p.name}</span>
+                    <span style="font-size:10px;color:${d.sub};flex-shrink:0">${p.p}</span>
+                  </div>`
+                );
+                // 투수 카드 (10번째 칸)
+                const pitcherCard = `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;background:${ct.color}18;border:1.5px solid ${ct.color}55">
+                  <span style="font-size:9px;font-weight:900;min-width:16px;text-align:center;color:${ct.color};background:${ct.color}22;border-radius:4px;padding:1px 3px">P</span>
+                  <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pitcherName}</span>
+                  <span style="font-size:10px;color:${ct.color};font-weight:700;flex-shrink:0">P</span>
+                </div>`;
+                // 9명이 홀수 위치에 있으면 투수 카드는 짝수 칸에 들어가 자연스럽게 2열 그리드 완성
+                return [...cards, pitcherCard].join('');
+              })()}
             </div>
           </div>
         </div>`}
@@ -2052,11 +2180,22 @@ function renderModal(d) {
         <div style="margin-top:8px">
           <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px">
             <span style="font-size:13px">📷</span>
-            <span style="font-size:12px;color:${d.sub};flex:1">사진 추가</span>
-            <input type="file" accept="image/*" id="memo-photo-input" style="display:none" onchange="saveMemoPhoto(this)"/>
+            <span style="font-size:12px;color:${d.sub};flex:1">사진 추가 <span style="font-size:10px;color:${d.sub};opacity:0.7">(여러 장 선택 가능)</span></span>
+            <input type="file" accept="image/*" id="memo-photo-input" style="display:none" multiple onchange="saveMemoPhoto(this)"/>
             <button onclick="document.getElementById('memo-photo-input').click()" style="font-size:11px;color:#E31837;font-weight:700;font-family:'Noto Sans KR',sans-serif;background:none;border:none;cursor:pointer;padding:4px 8px;border:1px solid #E31837;border-radius:6px">선택</button>
           </div>
-          <div id="memo-photo-preview" style="margin-top:8px">${memoData.photo?`<div style="position:relative;display:inline-block"><img src="${memoData.photo}" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover"/><button onclick="saveMemoField('photo',null)" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.5);color:#fff;border-radius:50%;width:24px;height:24px;font-size:13px;display:flex;align-items:center;justify-content:center">✕</button></div>`:''}</div>
+          <div id="memo-photo-preview" style="margin-top:8px">${(()=>{
+            const photos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
+            if(!photos.length) return '';
+            return `<div style="display:flex;flex-wrap:wrap;gap:6px">`
+              + photos.map((src,i) =>
+                `<div style="position:relative;width:80px;height:80px;flex-shrink:0">
+                  <img src="${src}" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block"/>
+                  <button onclick="deleteMemoPhoto(${i})" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
+                </div>`
+              ).join('')
+              + `</div>`;
+          })()}</div>
         </div>
         <button onclick="closeModal()" style="width:100%;margin-top:14px;padding:14px;background:#E31837;color:#fff;border-radius:12px;font-size:15px;font-weight:800;font-family:'Noto Sans KR',sans-serif;border:none;cursor:pointer">✓ 완료</button>
       </div>
@@ -2109,32 +2248,57 @@ function renderModal(d) {
     if(field !== 'text') renderModal(D());
   };
   window.saveMemoPhoto = function(input) {
-    if(!input||!input.files||!input.files[0]) return;
-    const file = input.files[0];
-    // 파일 크기 제한 2MB (localStorage 용량 초과 방지)
-    if(file.size > 5*1024*1024) {
+    if(!input||!input.files||!input.files.length) return;
+    const files = Array.from(input.files);
+    // 파일 크기 제한 5MB
+    const oversized = files.filter(f => f.size > 5*1024*1024);
+    if(oversized.length > 0) {
       alert('사진 크기가 너무 커요. 5MB 이하의 사진을 선택해 주세요.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = e => {
-      if(!e.target||!e.target.result) return;
-      const data = getMemoData();
-      data.photo = e.target.result;
-      saveMemoData(data);
-      const preview = document.getElementById('memo-photo-preview');
-      if(preview) {
-        preview.innerHTML = '<div style="position:relative;display:inline-block;width:100%">'
-          + '<img src="'+e.target.result+'" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover"/>'
-          + '<button onclick="saveMemoField(&quot;photo&quot;,null)" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.5);color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer">✕</button>'
-          + '</div>';
-      }
-      // input 초기화 (갤럭시 중복 선택 방지)
-      input.value = '';
-    };
-    reader.onerror = () => alert('사진을 불러오는 데 실패했어요. 다시 시도해 주세요.');
-    reader.readAsDataURL(file);
+    let loaded = 0;
+    const results = new Array(files.length);
+    files.forEach((file, idx) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        results[idx] = e.target.result;
+        loaded++;
+        if(loaded === files.length) {
+          const data = getMemoData();
+          const existing = data.photos || (data.photo ? [data.photo] : []);
+          data.photos = [...existing, ...results];
+          delete data.photo; // 이전 단일 포맷 제거
+          saveMemoData(data);
+          _refreshMemoPhotoPreview(data.photos);
+          input.value = '';
+        }
+      };
+      reader.onerror = () => alert('사진을 불러오는 데 실패했어요.');
+      reader.readAsDataURL(file);
+    });
   };
+  window.deleteMemoPhoto = function(idx) {
+    const data = getMemoData();
+    const photos = data.photos || (data.photo ? [data.photo] : []);
+    photos.splice(idx, 1);
+    data.photos = photos;
+    delete data.photo;
+    saveMemoData(data);
+    _refreshMemoPhotoPreview(photos);
+  };
+  function _refreshMemoPhotoPreview(photos) {
+    const preview = document.getElementById('memo-photo-preview');
+    if(!preview) return;
+    if(!photos || !photos.length) { preview.innerHTML = ''; return; }
+    preview.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+      + photos.map((src,i) =>
+        '<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
+        + '<img src="'+src+'" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block"/>'
+        + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
+        + '</div>'
+      ).join('')
+      + '</div>';
+  }
 
   document.getElementById('memo-input').addEventListener('input', e => {
     const data = getMemoData();
