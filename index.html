@@ -2010,13 +2010,24 @@ function renderModal(d) {
             const base3 = gs?.base3 === '1' || gs?.base3 > 0;
             const inningDisp = g.inningInfo || (g.inning ? g.inning+'회' : '');
 
-            // 수비 중인 팀 라인업
-            const defSide = lt==='away' ? (hasLU?cur:[]) : (hasLU?cur:[]);
+            // 이닝 초/말에 따라 수비팀 자동 결정
+            // 초(top) = away팀 공격 → home팀 수비
+            // 말(bottom) = home팀 공격 → away팀 수비
+            const inningInfoStr = g.inningInfo || '';
+            const isTop = inningInfoStr.includes('초') || (!inningInfoStr.includes('말') && true); // 기본값: 초
+            const isBottom = inningInfoStr.includes('말');
+            // 수비팀: 초이면 home, 말이면 away
+            const defIsHome = isBottom ? false : true; // 초=home수비, 말=away수비
+            const defTeam = defIsHome ? g.home : g.away;
+            const defColor = defIsHome ? hw.color : aw.color;
+            const defBatters = defIsHome ? (g.lineup?.home?.batters||[]) : (g.lineup?.away?.batters||[]);
+            const defLineup = buildDisplayLineup(defBatters);
+            const defSide = hasLU ? defLineup : [];
 
             // currentGameState에서 타자/투수 이름 추출
             const cgs = g.currentGameState;
             const batterNameCgs = cgs?.batter?.name || cgs?.batterName || '';
-            const pitcherNameCgs = cgs?.pitcher?.name || cgs?.pitcherName || pitcherName || '';
+            const pitcherNameCgs = cgs?.pitcher?.name || cgs?.pitcherName || (defIsHome ? (g.homePitcher||g.homeStarter||'') : (g.awayPitcher||g.awayStarter||'')) || '';
             const base1Runner = cgs?.base1Runner?.name || cgs?.base1RunnerName || (base1?'주자':'');
             const base2Runner = cgs?.base2Runner?.name || cgs?.base2RunnerName || (base2?'주자':'');
             const base3Runner = cgs?.base3Runner?.name || cgs?.base3RunnerName || (base3?'주자':'');
@@ -2054,7 +2065,7 @@ function renderModal(d) {
             const pins = fieldPlayers.map(fp => {
               const pos2 = PC2[fp.pos] || PC2.DH;
               const isP2 = fp.pos === 'P';
-              const tc = ct.color;
+              const tc = defColor; // 수비팀 색상 사용
               return `<div style="position:absolute;left:${pos2.x}%;top:${pos2.y}%;transform:translate(-50%,-50%);z-index:3">
                 <div style="background:${isP2?tc:'rgba(10,14,26,0.88)'};border:1.5px solid ${isP2?tc:'rgba(255,255,255,0.15)'};border-radius:8px;padding:3px 7px;display:flex;align-items:center;gap:3px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.35)">
                   ${isP2?`<span style="font-size:9px;font-weight:900;color:#fff;background:rgba(255,255,255,0.2);border-radius:3px;padding:1px 3px">P</span>`:''}
@@ -2080,10 +2091,10 @@ function renderModal(d) {
                 </div>
               </div>`);
             }
-            // 투수 핀 (마운드)
+            // 투수 핀 (마운드) - 수비팀 색상 사용
             if(pitcherNameCgs) {
               situationPins.push(`<div style="position:absolute;left:50%;top:56%;transform:translate(-50%,-50%);z-index:5">
-                <div style="background:${ct.color};border-radius:8px;padding:3px 8px;display:flex;align-items:center;gap:3px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+                <div style="background:${defColor};border-radius:8px;padding:3px 8px;display:flex;align-items:center;gap:3px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
                   <span style="font-size:9px;font-weight:900;color:#fff;background:rgba(255,255,255,0.25);border-radius:3px;padding:1px 3px">P</span>
                   <span style="font-size:11px;font-weight:700;color:#fff">${pitcherNameCgs}</span>
                 </div>
