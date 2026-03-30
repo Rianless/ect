@@ -796,14 +796,18 @@ const normalizePositionLabel = pos => {
 const buildDisplayLineup = lineup => (lineup || []).map((player, idx) => {
   const starterName = player.starterName || player.name || '';
   const currentName = player.name || starterName;
-  const starterPos = normalizePositionLabel(player.starterPos || player.pos || player.p || '');
+  const starterPos = normalizePositionLabel(player.starterPos || '');
   const currentPos = normalizePositionLabel(player.pos || player.p || '');
+  // 현재 선수가 대주자/대타로 교체된 경우 현재 포지션을 우선 사용
+  const isSub = starterName && starterName !== currentName;
+  const displayPos = isSub ? (currentPos || starterPos) : (currentPos || starterPos);
+  const subLabel = player.sub || (isSub ? starterName : null);
   return {
     n: player.order || player.n || idx + 1,
     name: currentName,
-    p: starterPos || currentPos,
-    pos: starterPos || currentPos,
-    sub: starterName && starterName !== currentName ? starterName : (player.sub || null),
+    p: displayPos,
+    pos: displayPos,
+    sub: subLabel,
   };
 });
 const formatInningBadge = g => g?.status === 'LIVE' ? (g.inningInfo || (g.inning ? `${g.inning}\uD68C` : 'LIVE')) : '';
@@ -1627,7 +1631,7 @@ function renderMyPage(d) {
   const nickname = profile.nickname || '타이거즈 팬';
   const photoSrc = profile.photo || '';
   // myTab이 undefined일 때만 초기값 설정 (null은 '모두 닫힘' 상태로 허용)
-  if(state.myTab === undefined) state.myTab = 'rank';
+  if(state.myTab === undefined) state.myTab = null;
 
   const sections = [
     {id:'rank', label:'📊 순위',   fn: renderStand},
@@ -2018,9 +2022,15 @@ function renderModal(d) {
             };
             const PC2 = {CF:{x:50,y:10},LF:{x:16,y:22},RF:{x:84,y:22},SS:{x:34,y:44},'2B':{x:64,y:44},P:{x:50,y:56},'3B':{x:18,y:64},'1B':{x:82,y:64},C:{x:50,y:82},DH:{x:8,y:78}};
 
-            const fieldPlayers = defSide.filter(p => p.pos && p.pos !== '지명타자').map(p => ({
-              name: p.name, pos: posMap[p.pos]||p.pos,
-            }));
+            // 다이아몬드 핀 생성: DH 제외, 같은 포지션에 여러 선수가 있으면 마지막(현재) 선수만 표시
+            const posSeenMap = {};
+            defSide.forEach(p => {
+              if (!p.pos) return;
+              const mappedPos = posMap[p.pos] || p.pos;
+              if (mappedPos === 'DH' || mappedPos === '지명타자') return;
+              posSeenMap[mappedPos] = p.name;
+            });
+            const fieldPlayers = Object.entries(posSeenMap).map(([pos, name]) => ({ name, pos }));
 
             // 다이아몬드 SVG + 핀
             const darkBg = state.dark;
@@ -2167,7 +2177,7 @@ function renderModal(d) {
                 const cards = batterCards.map((p,idx) =>
                   `<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:9px;background:${d.bg};border:1px solid ${d.bgB}">
                     <span style="font-size:11px;font-weight:900;min-width:16px;text-align:center;color:${ct.color}">${p.n}</span>
-                    <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.sub ? `${p.name} &larr; ${p.sub}` : p.name}</span>
+                    <span style="font-size:12px;font-weight:700;color:${state.dark?'#fff':d.text};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.sub ? `${p.name} ← ${p.sub}` : p.name}</span>
                     <span style="font-size:10px;color:${d.sub};flex-shrink:0">${p.p}</span>
                   </div>`
                 );
@@ -2188,7 +2198,7 @@ function renderModal(d) {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">📝</span>
-            <span style="font-size:13px;font-weight:800;color:${d.text}">내 메모</span>
+            <span style="font-size:13px;font-weight:800;color:${d.text}">경기 후기</span>
           </div>
           <span id="memo-saved" style="font-size:11px;color:#00C864;font-weight:700;display:none">저장됨 ✓</span>
         </div>
