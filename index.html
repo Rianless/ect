@@ -128,11 +128,11 @@ const SCH = [
   {date:"2026-04-03",away:"LG",home:"키움",stad:"고척 스카이돔",time:"18:30"},
   {date:"2026-04-03",away:"삼성",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
   {date:"2026-04-03",away:"SSG",home:"롯데",stad:"사직",time:"18:30"},
-  {date:"2026-04-04",away:"NC",home:"KIA",stad:"광주 기아챔피언스필드",time:"14:00"},
-  {date:"2026-04-04",away:"한화",home:"두산",stad:"잠실",time:"14:00"},
-  {date:"2026-04-04",away:"LG",home:"키움",stad:"고척 스카이돔",time:"14:00"},
-  {date:"2026-04-04",away:"삼성",home:"KT",stad:"수원 KT위즈파크",time:"14:00"},
-  {date:"2026-04-04",away:"SSG",home:"롯데",stad:"사직",time:"14:00"},
+  {date:"2026-04-04",away:"NC",home:"KIA",stad:"광주 기아챔피언스필드",time:"18:30"},
+  {date:"2026-04-04",away:"한화",home:"두산",stad:"잠실",time:"18:30"},
+  {date:"2026-04-04",away:"LG",home:"키움",stad:"고척 스카이돔",time:"18:30"},
+  {date:"2026-04-04",away:"삼성",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
+  {date:"2026-04-04",away:"SSG",home:"롯데",stad:"사직",time:"18:30"},
   {date:"2026-04-05",away:"NC",home:"KIA",stad:"광주 기아챔피언스필드",time:"14:00"},
   {date:"2026-04-05",away:"한화",home:"두산",stad:"잠실",time:"14:00"},
   {date:"2026-04-05",away:"LG",home:"키움",stad:"고척 스카이돔",time:"14:00"},
@@ -158,11 +158,11 @@ const SCH = [
   {date:"2026-04-10",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"18:30"},
   {date:"2026-04-10",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
   {date:"2026-04-10",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"18:30"},
-  {date:"2026-04-11",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"14:00"},
-  {date:"2026-04-11",away:"SSG",home:"LG",stad:"잠실",time:"14:00"},
-  {date:"2026-04-11",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"14:00"},
-  {date:"2026-04-11",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"14:00"},
-  {date:"2026-04-11",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"14:00"},
+  {date:"2026-04-11",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"18:30"},
+  {date:"2026-04-11",away:"SSG",home:"LG",stad:"잠실",time:"18:30"},
+  {date:"2026-04-11",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"18:30"},
+  {date:"2026-04-11",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
+  {date:"2026-04-11",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"18:30"},
   {date:"2026-04-12",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"14:00"},
   {date:"2026-04-12",away:"SSG",home:"LG",stad:"잠실",time:"14:00"},
   {date:"2026-04-12",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"14:00"},
@@ -701,10 +701,12 @@ const STAND=[
 
 const _kst0=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
 const _today0=_kst0.getFullYear()+'-'+String(_kst0.getMonth()+1).padStart(2,'0')+'-'+String(_kst0.getDate()).padStart(2,'0');
+// SCH 원본 시간 저장 (API 시간 변경 감지용)
+SCH.forEach(s => { s._origTime = s.time; });
 let state = {
   tab:'cal', dark:false, yr:_kst0.getFullYear(), mo:_kst0.getMonth()+1, sel:_today0,
   lcat:'batting', modalGame:null, modalLt:'away', clock:new Date(),
-  memoTab: false, myTab: 'rank', myTabInitialized: false,
+  memoTab: false, myTab: null, myTabInitialized: false,
 };
 // 즐겨찾기 로드
 let FAVS = JSON.parse(localStorage.getItem('kbo_favs')||'[]');
@@ -2022,13 +2024,18 @@ function renderModal(d) {
             };
             const PC2 = {CF:{x:50,y:10},LF:{x:16,y:22},RF:{x:84,y:22},SS:{x:34,y:44},'2B':{x:64,y:44},P:{x:50,y:56},'3B':{x:18,y:64},'1B':{x:82,y:64},C:{x:50,y:82},DH:{x:8,y:78}};
 
-            // 다이아몬드 핀 생성: DH 제외, 같은 포지션에 여러 선수가 있으면 마지막(현재) 선수만 표시
+            // 다이아몬드 핀 생성: 같은 포지션에 여러 선수가 있으면 마지막(현재) 선수만 표시, DH도 표시
+            // cur은 buildDisplayLineup을 거쳐 p.pos가 이미 영문 코드(LF, DH 등)일 수 있음
             const posSeenMap = {};
             defSide.forEach(p => {
-              if (!p.pos) return;
-              const mappedPos = posMap[p.pos] || p.pos;
-              if (mappedPos === 'DH' || mappedPos === '지명타자') return;
-              posSeenMap[mappedPos] = p.name;
+              const rawPos = p.pos || p.p || '';
+              if (!rawPos) return;
+              // 한글이면 영문으로 변환, 이미 영문이면 그대로
+              const mappedPos = posMap[rawPos] || rawPos;
+              const finalPos = mappedPos === '지명타자' ? 'DH' : mappedPos;
+              // PC2에 없는 포지션(대주자 등)는 스킵
+              if (!PC2[finalPos]) return;
+              posSeenMap[finalPos] = p.name;
             });
             const fieldPlayers = Object.entries(posSeenMap).map(([pos, name]) => ({ name, pos }));
 
@@ -2785,9 +2792,12 @@ async function fetchTodayScores(targetDate='') {
       if (g.gameId) upd.gameId = g.gameId;
       if (g.broadChannel) upd.broadChannel = g.broadChannel;
       Object.assign(SCH[idx], upd);
-      // FINAL이면 localStorage에 영구 저장
-      if (g.status === 'FINAL') {
-        saveGameCache(g.date+'_'+g.away+'_'+g.home, upd);
+      // FINAL이거나 시간이 변경된 경우 localStorage에 영구 저장
+      if (g.status === 'FINAL' || (g.time && g.time !== SCH[idx]._origTime)) {
+        const cacheData = {};
+        if (g.status === 'FINAL') Object.assign(cacheData, upd);
+        else if (g.time) cacheData.time = g.time; // 시간 변경만 저장
+        if (Object.keys(cacheData).length) saveGameCache(g.date+'_'+g.away+'_'+g.home, cacheData);
       }
       updated = true;
     });
@@ -2804,8 +2814,9 @@ async function fetchTodayScores(targetDate='') {
   }
 }
 
+// 앱 시작 시 즉시 스코어 가져오기 (render 전 실행)
+const _initFetch = fetchTodayScores();
 // 30초마다 갱신
-fetchTodayScores();
 setInterval(fetchTodayScores, 30000);
 
 // ===== 사진 전체화면 뷰어 =====
@@ -2853,7 +2864,9 @@ document.addEventListener('keydown', function(e) {
   if(e.key === 'ArrowRight') photoViewerNav(1);
 });
 
+// 초기 render: 캐시 적용 후 즉시 실행, 스코어 fetch 완료 후 자동 재렌더링
 render();
+_initFetch.then(() => render()).catch(() => {});
 </script>
 </body>
 </html>
