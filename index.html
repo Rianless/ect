@@ -52,6 +52,14 @@
     .inn-table .team-cell{text-align:left;padding:8px 6px;font-size:11px;font-weight:700}
     .tag-kia{font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700}
     .tag-lu{font-size:9px;background:rgba(0,230,118,0.15);color:#00E676;border-radius:4px;padding:1px 5px;font-weight:700;border:1px solid rgba(0,230,118,0.3)}
+    /* 사진 전체화면 뷰어 */
+    #photo-viewer{position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.95);display:none;align-items:center;justify-content:center;flex-direction:column;animation:fadeIn 0.2s}
+    #photo-viewer.open{display:flex}
+    #photo-viewer img{max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom}
+    #photo-viewer-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+    #photo-viewer-nav{position:absolute;bottom:24px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:12px}
+    #photo-viewer-prev,#photo-viewer-next{background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:50%;width:44px;height:44px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+    #photo-viewer-counter{color:rgba(255,255,255,0.7);font-size:13px;font-weight:700;min-width:48px;text-align:center}
   </style>
 </head>
 <body>
@@ -63,6 +71,16 @@
 <div id="modal-overlay">
   <div id="modal-box">
     <div id="modal-content"></div>
+  </div>
+</div>
+<!-- 사진 전체화면 뷰어 -->
+<div id="photo-viewer" onclick="closePhotoViewer()">
+  <button id="photo-viewer-close" onclick="closePhotoViewer()">✕</button>
+  <img id="photo-viewer-img" src="" alt=""/>
+  <div id="photo-viewer-nav" onclick="event.stopPropagation()">
+    <button id="photo-viewer-prev" onclick="photoViewerNav(-1)">‹</button>
+    <span id="photo-viewer-counter"></span>
+    <button id="photo-viewer-next" onclick="photoViewerNav(1)">›</button>
   </div>
 </div>
 
@@ -1159,10 +1177,12 @@ function renderBaseballRecord(d) {
     // 사진 미리보기 (여러 장, 작은 썸네일)
     const recPhotos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
     if(recPhotos.length > 0) {
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+      const recPJ = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
+      html += '<div data-photos="'+recPJ+'" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
       recPhotos.forEach(function(src, pi) {
         html += '<div style="position:relative;width:72px;height:72px;flex-shrink:0">';
-        html += '<img src="'+src+'" style="width:72px;height:72px;border-radius:8px;object-fit:cover;display:block"/>';
+        html += '<img src="'+src+'" onclick="event.stopPropagation();openPhotoViewer(JSON.parse(this.closest(\'[data-photos]\').dataset.photos),'+pi+')" '
+          + 'style="width:72px;height:72px;border-radius:8px;object-fit:cover;display:block;cursor:zoom-in"/>';
         html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\','+pi+')" '
           + 'style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;'
           + 'width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>';
@@ -1280,10 +1300,12 @@ window.recUploadPhoto = function(input, date, away, home) {
 function _recRenderPhotos(container, photos, date, away, home) {
   if(!container) return;
   if(!photos || !photos.length) { container.innerHTML = ''; return; }
-  container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+  const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
+  container.innerHTML = '<div data-photos="'+pj+'" style="display:flex;flex-wrap:wrap;gap:6px;">'
     + photos.map(function(src, pi) {
       return '<div style="position:relative;width:72px;height:72px;flex-shrink:0">'
-        + '<img src="'+src+'" style="width:72px;height:72px;border-radius:8px;object-fit:cover;display:block"/>'
+        + '<img src="'+src+'" onclick="event.stopPropagation();openPhotoViewer(JSON.parse(this.closest(\'[data-photos]\').dataset.photos),'+pi+')" '
+        + 'style="width:72px;height:72px;border-radius:8px;object-fit:cover;display:block;cursor:zoom-in"/>'
         + '<button onclick="event.stopPropagation();recDeletePhoto(\''+date+'\',\''+away+'\',\''+home+'\','+pi+')" '
         + 'style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;'
         + 'width:18px;height:18px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
@@ -2187,10 +2209,11 @@ function renderModal(d) {
           <div id="memo-photo-preview" style="margin-top:8px">${(()=>{
             const photos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
             if(!photos.length) return '';
-            return `<div style="display:flex;flex-wrap:wrap;gap:6px">`
+            const photosJson = JSON.stringify(photos).replace(/"/g,'&quot;');
+            return `<div data-photos="${photosJson}" style="display:flex;flex-wrap:wrap;gap:6px">`
               + photos.map((src,i) =>
                 `<div style="position:relative;width:80px;height:80px;flex-shrink:0">
-                  <img src="${src}" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block"/>
+                  <img src="${src}" onclick="openPhotoViewer(JSON.parse(this.closest('[data-photos]').dataset.photos),${i})" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block;cursor:zoom-in"/>
                   <button onclick="deleteMemoPhoto(${i})" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
                 </div>`
               ).join('')
@@ -2290,10 +2313,11 @@ function renderModal(d) {
     const preview = document.getElementById('memo-photo-preview');
     if(!preview) return;
     if(!photos || !photos.length) { preview.innerHTML = ''; return; }
-    preview.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
+    preview.innerHTML = '<div data-photos="'+pj+'" style="display:flex;flex-wrap:wrap;gap:6px">'
       + photos.map((src,i) =>
         '<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
-        + '<img src="'+src+'" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block"/>'
+        + '<img src="'+src+'" onclick="openPhotoViewer(JSON.parse(this.closest(\'[data-photos]\').dataset.photos),'+i+')" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block;cursor:zoom-in"/>'
         + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
         + '</div>'
       ).join('')
@@ -2726,6 +2750,8 @@ async function fetchTodayScores(targetDate='') {
       if (idx === -1) return;
       const upd = {};
       if (g.status) upd.status = g.status;
+      // API에서 받아온 실시간 시간을 SCH에 덮어쓰기 (시간 변경 대응)
+      if (g.time) upd.time = g.time;
       if (g.awayScore != null) upd.awayScore = g.awayScore;
       if (g.homeScore != null) upd.homeScore = g.homeScore;
       if (g.awayInnings?.some(x=>x>=0)) upd.awayInnings = g.awayInnings;
@@ -2771,6 +2797,51 @@ async function fetchTodayScores(targetDate='') {
 // 30초마다 갱신
 fetchTodayScores();
 setInterval(fetchTodayScores, 30000);
+
+// ===== 사진 전체화면 뷰어 =====
+let _pvPhotos = [];
+let _pvIdx = 0;
+
+window.openPhotoViewer = function(photos, startIdx) {
+  _pvPhotos = Array.isArray(photos) ? photos : [photos];
+  _pvIdx = startIdx || 0;
+  _pvUpdate();
+  document.getElementById('photo-viewer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+
+window.closePhotoViewer = function() {
+  document.getElementById('photo-viewer').classList.remove('open');
+  document.body.style.overflow = '';
+};
+
+window.photoViewerNav = function(dir) {
+  _pvIdx = (_pvIdx + dir + _pvPhotos.length) % _pvPhotos.length;
+  _pvUpdate();
+};
+
+function _pvUpdate() {
+  document.getElementById('photo-viewer-img').src = _pvPhotos[_pvIdx];
+  const counter = document.getElementById('photo-viewer-counter');
+  if(_pvPhotos.length > 1) {
+    counter.textContent = (_pvIdx+1) + ' / ' + _pvPhotos.length;
+    document.getElementById('photo-viewer-prev').style.display = 'flex';
+    document.getElementById('photo-viewer-next').style.display = 'flex';
+  } else {
+    counter.textContent = '';
+    document.getElementById('photo-viewer-prev').style.display = 'none';
+    document.getElementById('photo-viewer-next').style.display = 'none';
+  }
+}
+
+// 키보드 지원 (PC)
+document.addEventListener('keydown', function(e) {
+  const viewer = document.getElementById('photo-viewer');
+  if(!viewer.classList.contains('open')) return;
+  if(e.key === 'Escape') closePhotoViewer();
+  if(e.key === 'ArrowLeft') photoViewerNav(-1);
+  if(e.key === 'ArrowRight') photoViewerNav(1);
+});
 
 render();
 </script>
