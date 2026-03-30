@@ -128,11 +128,11 @@ const SCH = [
   {date:"2026-04-03",away:"LG",home:"키움",stad:"고척 스카이돔",time:"18:30"},
   {date:"2026-04-03",away:"삼성",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
   {date:"2026-04-03",away:"SSG",home:"롯데",stad:"사직",time:"18:30"},
-  {date:"2026-04-04",away:"NC",home:"KIA",stad:"광주 기아챔피언스필드",time:"18:30"},
-  {date:"2026-04-04",away:"한화",home:"두산",stad:"잠실",time:"18:30"},
-  {date:"2026-04-04",away:"LG",home:"키움",stad:"고척 스카이돔",time:"18:30"},
-  {date:"2026-04-04",away:"삼성",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
-  {date:"2026-04-04",away:"SSG",home:"롯데",stad:"사직",time:"18:30"},
+  {date:"2026-04-04",away:"NC",home:"KIA",stad:"광주 기아챔피언스필드",time:"17:00"},
+  {date:"2026-04-04",away:"한화",home:"두산",stad:"잠실",time:"17:00"},
+  {date:"2026-04-04",away:"LG",home:"키움",stad:"고척 스카이돔",time:"17:00"},
+  {date:"2026-04-04",away:"삼성",home:"KT",stad:"수원 KT위즈파크",time:"17:00"},
+  {date:"2026-04-04",away:"SSG",home:"롯데",stad:"사직",time:"17:00"},
   {date:"2026-04-05",away:"NC",home:"KIA",stad:"광주 기아챔피언스필드",time:"14:00"},
   {date:"2026-04-05",away:"한화",home:"두산",stad:"잠실",time:"14:00"},
   {date:"2026-04-05",away:"LG",home:"키움",stad:"고척 스카이돔",time:"14:00"},
@@ -158,11 +158,11 @@ const SCH = [
   {date:"2026-04-10",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"18:30"},
   {date:"2026-04-10",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
   {date:"2026-04-10",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"18:30"},
-  {date:"2026-04-11",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"18:30"},
-  {date:"2026-04-11",away:"SSG",home:"LG",stad:"잠실",time:"18:30"},
-  {date:"2026-04-11",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"18:30"},
-  {date:"2026-04-11",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"18:30"},
-  {date:"2026-04-11",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"18:30"},
+  {date:"2026-04-11",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"17:00"},
+  {date:"2026-04-11",away:"SSG",home:"LG",stad:"잠실",time:"17:00"},
+  {date:"2026-04-11",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"17:00"},
+  {date:"2026-04-11",away:"두산",home:"KT",stad:"수원 KT위즈파크",time:"17:00"},
+  {date:"2026-04-11",away:"NC",home:"삼성",stad:"대구 삼성라이온즈파크",time:"17:00"},
   {date:"2026-04-12",away:"KIA",home:"한화",stad:"대전 한화생명이글스파크",time:"14:00"},
   {date:"2026-04-12",away:"SSG",home:"LG",stad:"잠실",time:"14:00"},
   {date:"2026-04-12",away:"롯데",home:"키움",stad:"고척 스카이돔",time:"14:00"},
@@ -795,14 +795,19 @@ const normalizePositionLabel = pos => {
   };
   return map[pos] || pos || '';
 };
+// 다이아몬드에 표시 가능한 포지션 코드 목록
+const FIELD_POSITIONS = new Set(['CF','LF','RF','SS','2B','1B','3B','C','P','DH']);
+// 포지션이 실제 수비 포지션인지 확인 (대주자/대타 등 비필드 포지션 제외)
+const isFieldPos = pos => FIELD_POSITIONS.has(pos);
+
 const buildDisplayLineup = lineup => (lineup || []).map((player, idx) => {
   const starterName = player.starterName || player.name || '';
   const currentName = player.name || starterName;
   const starterPos = normalizePositionLabel(player.starterPos || '');
   const currentPos = normalizePositionLabel(player.pos || player.p || '');
-  // 현재 선수가 대주자/대타로 교체된 경우 현재 포지션을 우선 사용
+  // 현재 포지션이 대주자/대타 등 비필드 포지션이면 선발(스타터)의 수비 포지션을 사용
+  const displayPos = isFieldPos(currentPos) ? currentPos : (starterPos || currentPos);
   const isSub = starterName && starterName !== currentName;
-  const displayPos = isSub ? (currentPos || starterPos) : (currentPos || starterPos);
   const subLabel = player.sub || (isSub ? starterName : null);
   return {
     n: player.order || player.n || idx + 1,
@@ -2421,7 +2426,8 @@ async function fetchLineupDirect(gameId, inning) {
       return Object.entries(om).sort(([a],[b])=>+a-+b).map(([o,ps]) => {
         const cur = ps.find(p=>p.cin==='true') || ps.find(p=>!p.cout) || ps[ps.length-1];
         const prev = ps.find(p=>p.cout==='true' && p!==cur);
-        return { n:+o, order:+o, name:cur.name, p:cur.posName||'', pos:cur.posName||'', sub:prev?.name||null, hit:cur.hit||0, ab:cur.ab||0, rbi:cur.rbi||0 };
+        const starter = ps[0];
+        return { n:+o, order:+o, name:cur.name, p:cur.posName||'', pos:cur.posName||'', sub:prev?.name||null, starterName:starter?.name||cur.name, starterPos:starter?.posName||cur.posName||'', hit:cur.hit||0, ab:cur.ab||0, rbi:cur.rbi||0 };
       });
     };
     const parsePitchers = (arr) => (arr||[]).map(p=>({ seqno:p.seqno, name:p.name, inn:p.inn||'0', er:p.er||0, kk:p.kk||0 }));
