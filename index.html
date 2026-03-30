@@ -791,12 +791,12 @@ const normalizePositionLabel = pos => {
   const nonField = new Set(['대주자','대타','주자','대주자/대타','대타/대주자']);
   if (nonField.has(pos)) return '';
   const map = {
-    '중간수':'CF','좌익수':'LF','우익수':'RF','유격수':'SS',
+    '중견수':'CF','좌익수':'LF','우익수':'RF','유격수':'SS',
     '2루수':'2B','1루수':'1B','3루수':'3B','포수':'C',
     '투수':'P','지명타자':'DH',
     CF:'CF', LF:'LF', RF:'RF', SS:'SS', '2B':'2B', '1B':'1B', '3B':'3B', C:'C', P:'P', DH:'DH'
   };
-  return map[pos] || pos || '';
+  return map[pos] || '';
 };
 // 다이아몬드에 표시 가능한 포지션 코드 목록
 const FIELD_POSITIONS = new Set(['CF','LF','RF','SS','2B','1B','3B','C','P','DH']);
