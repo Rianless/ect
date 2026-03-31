@@ -2943,31 +2943,69 @@ setInterval(fetchTodayScores, 30000);
 // ── 중계 전체화면 ──
 
 async function fetchRelayData(gameId, inn) {
+  if (!gameId) return null;
+  const inning = Math.max(1, inn || 1);
+  const HEADERS = { Accept: 'application/json' };
+
+  // 텍스트 중계 파싱 헬퍼
+  function findTextRelays(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (Array.isArray(obj)) {
+      if (obj.length > 0 && (obj[0].title || obj[0].text || obj[0].type != null)) return obj;
+      return null;
+    }
+    if (obj.textRelays) return obj.textRelays;
+    if (obj.relays) return obj.relays;
+    if (obj.list) return obj.list;
+    for (const key in obj) {
+      const found = findTextRelays(obj[key]);
+      if (found) return found;
+    }
+    return null;
+  }
+
   try {
-    console.log(`[Frontend] Requesting relay data from /api/kbo for gameId: ${gameId}, inning: ${inn}`);
-    const url = `/api/kbo?gameId=${gameId}&inning=${inn}`;
-    const r = await fetch(url);
-    if (!r.ok) {
-      console.error(`[Frontend] API fetch failed with status: ${r.status}`);
-      throw new Error(`API fetch failed: ${r.status}`);
+    // 1차: text-relay 엔드포인트 (종료 경기에 더 정확)
+    let result = null;
+    try {
+      const r1 = await fetch(
+        `https://api-gw.sports.naver.com/schedule/games/${gameId}/text-relay?inning=${inning}&isHighlight=false`,
+        { headers: HEADERS }
+      );
+      if (r1.ok) {
+        const d1 = await r1.json();
+        if (d1?.result) result = d1.result;
+      }
+    } catch(e) {}
+
+    // 2차: game-polling 폴백
+    if (!result) {
+      try {
+        const r2 = await fetch(
+          `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inning}&isHighlight=false`,
+          { headers: HEADERS }
+        );
+        if (r2.ok) {
+          const d2 = await r2.json();
+          if (d2?.result) result = d2.result;
+        }
+      } catch(e) {}
     }
-    
-    const data = await r.json();
-    console.log(`[Frontend] Received API response:`, data);
-    
-    const game = data.games.find(g => String(g.gameId) === String(gameId));
-    
-    if (game) {
-      console.log(`[Frontend] Game found for gameId ${gameId}. TextRelays count: ${game.textRelays?.length || 0}`);
-      console.log("[Frontend] Game data for rendering:", game);
-    } else {
-      console.log(`[Frontend] Game not found in API response for gameId: ${gameId}`);
-    }
-    
-    return game || null;
-  } catch (e) { 
-    console.error("[Frontend] Relay fetch error:", e);
-    return null; 
+
+    if (!result) return null;
+
+    const textRelays = findTextRelays(result) || [];
+    const gs = result.textRelayData?.currentGameState || result.currentGameState || null;
+
+    return {
+      gameId: String(gameId),
+      currentGameState: gs,
+      inningInfo: result.game?.statusInfo || null,
+      textRelays,
+    };
+  } catch(e) {
+    console.error("[Relay] fetchRelayData error:", e);
+    return null;
   }
 }
 
@@ -3252,30 +3290,5 @@ render();
 _initFetch.then(() => render()).catch(() => {});
 </script>
 
-<!-- ── 중계 전체화면 패널 ── -->
-<div id="relay-panel" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:none;align-items:flex-end;justify-content:center">
-  <div id="relay-box" style="width:100%;max-width:520px;height:95vh;background:#fff;border-radius:22px 22px 0 0;display:flex;flex-direction:column;animation:slideUp 0.3s ease">
-    <!-- 헤더 -->
-    <div id="relay-header" style="padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.08);flex-shrink:0">
-      <div style="display:flex;justify-content:center;margin-bottom:8px">
-        <div style="width:34px;height:4px;border-radius:2px;background:rgba(0,0,0,0.15)"></div>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div id="relay-title" style="font-size:15px;font-weight:900;color:#0A0E1A"></div>
-          <div id="relay-sub" style="font-size:11px;color:rgba(0,0,0,0.45);margin-top:2px"></div>
-        </div>
-        <button onclick="closeRelay()" style="background:rgba(0,0,0,0.07);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
-      </div>
-    </div>
-    <!-- 다이아몬드 상황판 (고정) -->
-    <div id="relay-diamond" style="flex-shrink:0;padding:0;background:#f8f8f8;border-bottom:1px solid rgba(0,0,0,0.08)"></div>
-    <!-- 이닝 탭 -->
-    <div id="relay-inn-tabs" style="display:flex;overflow-x:auto;padding:8px 14px 0;gap:6px;flex-shrink:0;border-bottom:1px solid rgba(0,0,0,0.07)"></div>
-    <!-- 텍스트 중계 스크롤 영역 -->
-    <div id="relay-body" style="flex:1;overflow-y:auto;padding:0 0 20px;-webkit-overflow-scrolling:touch"></div>
-  </div>
-</div>
 </body>
 </html>
-
