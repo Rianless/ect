@@ -3104,8 +3104,6 @@ async function fetchScoresPayload(targetDate='') {
   const candidates = [];
   if (window.KBO_SCORES_API_URL) candidates.push(window.KBO_SCORES_API_URL);
   if (location.protocol !== 'file:') candidates.push(`/api/kboScores${targetDate ? `?date=${targetDate}` : ''}`);
-  candidates.push(`http://127.0.0.1:3000/api/kboScores${targetDate ? `?date=${targetDate}` : ''}`);
-  candidates.push(`http://localhost:3000/api/kboScores${targetDate ? `?date=${targetDate}` : ''}`);
 
   for (const url of candidates) {
     try {
