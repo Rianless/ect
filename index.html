@@ -4106,18 +4106,23 @@ document.addEventListener('keydown', function(e) {
 // 초기 render: 캐시 적용 후 즉시 실행, 스코어 fetch 완료 후 자동 재렌더링
 // ── 기록 탭 사진 슬라이드 터치 핸들러 ──
 // ── 기록 탭 사진 슬라이드 (show/hide 방식) ──
+// 슬라이드 현재 인덱스를 JS Map으로 관리 (DOM dataset 의존 제거)
+const _slideState = new Map();
+
 window.recSlide = function(slideId, dir) {
   const wrap = document.getElementById(slideId);
   if (!wrap) return;
   const items = wrap.querySelectorAll('.sl-item');
   const total = items.length;
   if (!total) return;
-  let cur = parseInt(wrap.dataset.cur) || 0;
+  // Map에서 현재 인덱스 읽기 (없으면 data-cur 또는 0)
+  let cur = _slideState.has(slideId) ? _slideState.get(slideId) : (parseInt(wrap.dataset.cur) || 0);
   items[cur].style.display = 'none';
   cur = (cur + dir + total) % total;
   items[cur].style.display = 'block';
+  // Map과 dataset 모두 업데이트
+  _slideState.set(slideId, cur);
   wrap.dataset.cur = cur;
-  // 카운터 텍스트 업데이트 (sl-item 밖 네비게이션 영역에 하나만 존재)
   const counter = wrap.querySelector('.sl-counter');
   if (counter) counter.textContent = (cur + 1) + ' / ' + total;
 };
@@ -4126,7 +4131,7 @@ window.recOpenPhoto = function(slideId) {
   const wrap = document.getElementById(slideId);
   if (!wrap) return;
   const photos = JSON.parse(wrap.dataset.photos || '[]');
-  const cur = parseInt(wrap.dataset.cur) || 0;
+  const cur = _slideState.has(slideId) ? _slideState.get(slideId) : (parseInt(wrap.dataset.cur) || 0);
   openPhotoViewer(photos, cur);
 };
 
