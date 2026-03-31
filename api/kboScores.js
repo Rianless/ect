@@ -99,6 +99,30 @@ export default async function handler(req, res) {
     }));
   }
 
+  // Helper function to recursively find textRelays
+  function findTextRelaysRecursive(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (Array.isArray(obj)) {
+      // If it's an array and elements look like relay items
+      if (obj.length > 0 && (obj[0].title || obj[0].text || obj[0].type)) {
+        return obj;
+      }
+      return null;
+    }
+
+    // Check common keys first
+    if (obj.textRelays) return obj.textRelays;
+    if (obj.relays) return obj.relays;
+    if (obj.list) return obj.list;
+
+    // Recursively search in nested objects
+    for (const key in obj) {
+      const found = findTextRelaysRecursive(obj[key]);
+      if (found) return found;
+    }
+    return null;
+  }
+
   function buildLineup(detail) {
     if (!detail) return null;
     const td = detail.textRelayData || detail;
@@ -161,13 +185,8 @@ export default async function handler(req, res) {
 
     const lu = buildLineup(detail);
     
-    // textRelayData에서 중계 텍스트 데이터 추출
-    let textRelaysData = [];
-    if (detail?.textRelayData?.textRelays) {
-      textRelaysData = detail.textRelayData.textRelays;
-    } else if (detail?.textRelays) {
-      textRelaysData = detail.textRelays;
-    }
+    // textRelayData에서 중계 텍스트 데이터 추출 (재귀적 탐색)
+    const textRelaysData = findTextRelaysRecursive(detail) || [];
 
     const td = detail?.textRelayData || detail || {};
 
@@ -195,7 +214,7 @@ export default async function handler(req, res) {
       broadChannel: g.broadChannel || null,
       lineup: lu,
       currentGameState: (() => {
-        const cgs = td.currentGameState || null;
+        const cgs = detail?.currentGameState || td?.currentGameState || null;
         if (!cgs) return null;
         const pcodeMap = lu?.pcodeMap || {};
         const info = g.statusInfo || "";
