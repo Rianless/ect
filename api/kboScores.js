@@ -27,10 +27,11 @@ export default async function handler(req, res) {
     'Origin': 'https://m.sports.naver.com',
   };
 
+  // textRelays 배열 재귀 탐색
   function findTextRelaysRecursive(obj) {
     if (!obj || typeof obj !== 'object') return null;
     if (Array.isArray(obj)) {
-      if (obj.length > 0 && (obj[0].title || obj[0].text || obj[0].type)) return obj;
+      if (obj.length > 0 && (obj[0].title || obj[0].text || obj[0].type != null)) return obj;
       return null;
     }
     if (obj.textRelays) return obj.textRelays;
@@ -41,6 +42,14 @@ export default async function handler(req, res) {
       if (found) return found;
     }
     return null;
+  }
+
+  // textOptions 마지막 항목에서 결과 텍스트 추출
+  function extractResult(item) {
+    const opts = item.textOptions || [];
+    if (!opts.length) return null;
+    const last = opts[opts.length - 1];
+    return last?.text || last?.title || null;
   }
 
   async function fetchSchedule(date) {
@@ -102,7 +111,24 @@ export default async function handler(req, res) {
     awayInnRaw.forEach((s,i)=>{ if(i<9 && s!=='-') awayInnings[i]=Number(s); });
     homeInnRaw.forEach((s,i)=>{ if(i<9 && s!=='-') homeInnings[i]=Number(s); });
 
-    const textRelaysData = findTextRelaysRecursive(detail) || [];
+    const rawRelays = findTextRelaysRecursive(detail) || [];
+    // 각 relay item에 resultText 추가 (textOptions 마지막 항목)
+    const textRelaysData = rawRelays.map(item => ({
+      ...item,
+      resultText: extractResult(item),
+    }));
+
+    // 선발투수: 네이버 API의 다양한 필드명 커버 (schedule API baseball 필드 포함)
+    const awayStarter =
+      g.awayStarterName || g.awayStarter || g.awayStarterPitcherName ||
+      gameData.awayStarterName || gameData.awayStarter ||
+      detail?.awayStarterName || detail?.awayStarter ||
+      detail?.game?.awayStarterName || null;
+    const homeStarter =
+      g.homeStarterName || g.homeStarter || g.homeStarterPitcherName ||
+      gameData.homeStarterName || gameData.homeStarter ||
+      detail?.homeStarterName || detail?.homeStarter ||
+      detail?.game?.homeStarterName || null;
 
     return {
       gameId: String(g.gameId || ""),
@@ -115,6 +141,10 @@ export default async function handler(req, res) {
       inningInfo: g.statusInfo || null,
       currentGameState: detail?.currentGameState || null,
       textRelays: textRelaysData,
+      awayStarter,
+      homeStarter,
+      winPitcher: gameData.winPitcherName || g.winPitcherName || null,
+      losePitcher: gameData.losePitcherName || g.losePitcherName || null,
     };
   }
 
@@ -123,15 +153,12 @@ export default async function handler(req, res) {
     const inning = req.query.inning ? parseInt(req.query.inning) : null;
     const action = req.query.action || '';
 
-    // 라인업 전용: ?gameId=XXX&action=lineup
     if (gameId && action === 'lineup') {
       const result = await fetchLineup(gameId, inning);
       if (!result) return res.status(404).json({ error: 'Lineup not found' });
       return res.status(200).json(result);
     }
 
-    // 중계 데이터: ?gameId=XXX&inning=N
-    // gameId 앞 8자리에서 날짜 자동 추출 (예: 20260329HTSK02026)
     if (gameId) {
       const m = String(gameId).match(/^(\d{4})(\d{2})(\d{2})/);
       const gameDateDash = m ? `${m[1]}-${m[2]}-${m[3]}` : todayDash;
@@ -142,9 +169,16 @@ export default async function handler(req, res) {
       return res.status(200).json(convertGame(g, detail));
     }
 
-    // 전체 일정
     const rawGames = await fetchSchedule(todayDash);
-    const allGames = rawGames.map(g => convertGame(g, null));
+    // 선발 정보를 위해 lineup API 병렬 호출 (BEFORE/STARTED/RESULT 모두)
+    const detailMap = {};
+    await Promise.all(rawGames.map(async g => {
+      try {
+        const lineupResult = await fetchLineup(g.gameId, 1);
+        if (lineupResult) detailMap[g.gameId] = lineupResult;
+      } catch(e) {}
+    }));
+    const allGames = rawGames.map(g => convertGame(g, detailMap[g.gameId] || null));
     return res.status(200).json({ games: allGames, date: todayStr });
   } catch(e) {
     return res.status(500).json({ error: e.message });
