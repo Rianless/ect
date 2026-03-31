@@ -1286,17 +1286,17 @@ function renderBaseballRecord(d) {
     const recPhotos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
     if(recPhotos.length > 0) {
       const recPJ = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
-      html += '<div class="rec-photo-wrap" style="margin-bottom:10px">';
-      html += '<div data-photos="'+recPJ+'" style="display:flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding-bottom:4px">';
+      html += '<div class="rec-photo-wrap" style="margin-bottom:10px;overflow:hidden;border-radius:10px">';
+      html += '<div data-photos="'+recPJ+'" style="display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding-bottom:4px;gap:0">';
       recPhotos.forEach(function(src, pi) {
-        html += '<div style="position:relative;flex-shrink:0;width:100%;scroll-snap-align:start">';
+        html += '<div style="position:relative;flex:0 0 100%;min-width:0;scroll-snap-align:start">';
         html += '<img src="'+src+'" onclick="event.stopPropagation();openPhotoViewer(JSON.parse(this.closest(\'[data-photos]\').dataset.photos),'+pi+')" '
-          + 'style="width:100%;max-height:260px;border-radius:10px;object-fit:cover;display:block;cursor:zoom-in"/>';
+          + 'style="width:100%;height:auto;max-height:360px;border-radius:10px;object-fit:contain;display:block;cursor:zoom-in;background:#000"/>';
         html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\','+pi+')" '
           + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
-          + 'width:24px;height:24px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>';
+          + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>';
         if(recPhotos.length > 1) {
-          html += '<div style="position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,0.45);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:2px 7px">'+(pi+1)+'/'+recPhotos.length+'</div>';
+          html += '<div style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px">'+(pi+1)+'/'+recPhotos.length+'</div>';
         }
         html += '</div>';
       });
@@ -1414,15 +1414,15 @@ function _recRenderPhotos(container, photos, date, away, home) {
   if(!container) return;
   if(!photos || !photos.length) { container.innerHTML = ''; return; }
   const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-  container.innerHTML = '<div data-photos="'+pj+'" style="display:flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding-bottom:4px">'
+  container.innerHTML = '<div data-photos="'+pj+'" style="display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding-bottom:4px;gap:0">'
     + photos.map(function(src, pi) {
-      return '<div style="position:relative;flex-shrink:0;width:100%;scroll-snap-align:start">'
+      return '<div style="position:relative;flex:0 0 100%;min-width:0;scroll-snap-align:start">'
         + '<img src="'+src+'" onclick="event.stopPropagation();openPhotoViewer(JSON.parse(this.closest(\'[data-photos]\').dataset.photos),'+pi+')" '
-        + 'style="width:100%;max-height:260px;border-radius:10px;object-fit:cover;display:block;cursor:zoom-in"/>'
+        + 'style="width:100%;height:auto;max-height:360px;border-radius:10px;object-fit:contain;display:block;cursor:zoom-in;background:#000"/>'
         + '<button onclick="event.stopPropagation();recDeletePhoto(\''+date+'\',\''+away+'\',\''+home+'\','+pi+')" '
         + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
-        + 'width:24px;height:24px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
-        + (photos.length > 1 ? '<div style="position:absolute;bottom:8px;right:10px;background:rgba(0,0,0,0.45);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:2px 7px">'+(pi+1)+'/'+photos.length+'</div>' : '')
+        + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>'
+        + (photos.length > 1 ? '<div style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px">'+(pi+1)+'/'+photos.length+'</div>' : '')
         + '</div>';
     }).join('')
     + '</div>';
