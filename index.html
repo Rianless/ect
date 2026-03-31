@@ -2116,8 +2116,8 @@ function renderModal(d) {
           ${(isLive||isFinal)?`<button onclick="openRelay('${g.gameId}','${g.away}','${g.home}',${g.inning||1})" style="display:flex;align-items:center;gap:5px;padding:6px 12px;background:#E31837;border:none;border-radius:20px;color:#fff;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer">📋 중계 전체보기</button>`:''}
         </div>
         ${!hasLU?`<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
-          <div style="font-size:24px;margin-bottom:6px">${(isLive||isFinal)?'⏳':'📋'}</div>
-          <div style="font-size:13px;color:${d.sub}">${(isLive||isFinal)?'라인업 불러오는 중...':'라인업은 경기 당일 발표됩니다'}</div>
+          <div style="font-size:24px;margin-bottom:6px">⏳</div>
+          <div style="font-size:13px;color:${d.sub}">라인업 불러오는 중...</div>
         </div>`:
         `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;overflow:hidden">
           ${(()=>{
@@ -2545,44 +2545,85 @@ async function fetchLineupDirect(gameId, inning) {
   if (!gameId) return null;
   const inn = Math.max(1, inning || 1);
   try {
+    // 1순위: action=lineup (서버 경유 - 네이버 lineup API)
     const r = await fetch(`/api/kboScores?gameId=${encodeURIComponent(gameId)}&inning=${inn}&action=lineup`);
     if (!r.ok) return null;
     const result = await r.json();
     if (!result) return null;
 
+    // 서버가 정규화한 lineup 필드 우선 사용
+    const serverLineup = result.lineup;
+    // 다양한 키 구조 탐색
     const td = result.textRelayData || result;
-    const homeL = td.homeLineup || result.homeLineup;
-    const awayL = td.awayLineup || result.awayLineup;
+    const homeL = serverLineup?.homeLineup
+      || td.homeLineup || result.homeLineup
+      || (result.home?.batter ? result.home : null)
+      || null;
+    const awayL = serverLineup?.awayLineup
+      || td.awayLineup || result.awayLineup
+      || (result.away?.batter ? result.away : null)
+      || null;
     const gs = td.currentGameState || result.currentGameState;
 
     const parseBatters = (arr) => {
       if (!arr?.length) return [];
+      // batter 배열 또는 객체 처리
+      const batArr = Array.isArray(arr) ? arr : (arr.batter || []);
       const om = {};
-      arr.forEach(p => { if (!om[p.batOrder]) om[p.batOrder] = []; om[p.batOrder].push(p); });
+      batArr.forEach(p => {
+        const key = p.batOrder || p.order || p.n;
+        if (!om[key]) om[key] = [];
+        om[key].push(p);
+      });
       return Object.entries(om).sort(([a],[b])=>+a-+b).map(([o,ps]) => {
-        const cur = ps.find(p=>p.cin==='true') || ps.find(p=>!p.cout) || ps[ps.length-1];
-        const replaced = ps.find(p=>p.cout==='true' && p!==cur);
+        const cur = ps.find(p=>p.cin==='true'||p.cin===true) || ps.find(p=>!p.cout) || ps[ps.length-1];
+        const replaced = ps.find(p=>(p.cout==='true'||p.cout===true) && p!==cur);
         const starterForPos = replaced || cur;
-        return { n:+o, order:+o, name:cur.name, p:cur.posName||'', pos:cur.posName||'', sub:replaced?.name||null, starterName:starterForPos?.name||cur.name, starterPos:starterForPos?.posName||cur.posName||'', hit:cur.hit||0, ab:cur.ab||0, rbi:cur.rbi||0 };
+        return {
+          n:+o, order:+o,
+          name: cur.name || cur.playerName || '',
+          p: cur.posName || cur.position || cur.pos || '',
+          pos: cur.posName || cur.position || cur.pos || '',
+          sub: replaced?.name || null,
+          starterName: starterForPos?.name || cur.name || '',
+          starterPos: starterForPos?.posName || starterForPos?.pos || cur.posName || '',
+          hit: cur.hit||0, ab: cur.ab||0, rbi: cur.rbi||0
+        };
       });
     };
-    const parsePitchers = (arr) => (arr||[]).map(p=>({ seqno:p.seqno, name:p.name, inn:p.inn||'0', er:p.er||0, kk:p.kk||0 }));
+    const parsePitchers = (arr) => {
+      const pArr = Array.isArray(arr) ? arr : (arr?.pitcher || []);
+      return pArr.map(p=>({ seqno:p.seqno, name:p.name||p.playerName||'', inn:p.inn||'0', er:p.er||0, kk:p.kk||0 }));
+    };
 
     if (!homeL && !awayL) return gs ? { currentGameState: gs } : null;
 
+    // batter 배열 추출 (homeL이 {batter:[]} 형태이거나 배열 자체이거나)
+    const homeBatterArr = Array.isArray(homeL) ? homeL : (homeL?.batter || []);
+    const awayBatterArr = Array.isArray(awayL) ? awayL : (awayL?.batter || []);
+    const homePitcherArr = Array.isArray(homeL) ? [] : (homeL?.pitcher || []);
+    const awayPitcherArr = Array.isArray(awayL) ? [] : (awayL?.pitcher || []);
+
     const pcodeMap = {};
-    [...(homeL?.batter||[]), ...(homeL?.pitcher||[]), ...(awayL?.batter||[]), ...(awayL?.pitcher||[])]
-      .forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name; });
+    [...homeBatterArr, ...homePitcherArr, ...awayBatterArr, ...awayPitcherArr]
+      .forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name || p.playerName; });
 
     const buildOrderMap = (batters) => {
       const om = {};
-      (batters||[]).forEach(p => { if(!om[p.batOrder]) om[p.batOrder]=[]; om[p.batOrder].push(p); });
+      batters.forEach(p => {
+        const key = p.batOrder || p.order;
+        if(!om[key]) om[key]=[];
+        om[key].push(p);
+      });
       const res = {};
-      Object.entries(om).forEach(([o,ps]) => { const cur = ps.find(p=>p.cin==='true') || ps[ps.length-1]; res[o] = cur.name; });
+      Object.entries(om).forEach(([o,ps]) => {
+        const cur = ps.find(p=>p.cin==='true'||p.cin===true) || ps[ps.length-1];
+        res[o] = cur.name || cur.playerName || '';
+      });
       return res;
     };
-    const homeOrderMap = buildOrderMap(homeL?.batter);
-    const awayOrderMap = buildOrderMap(awayL?.batter);
+    const homeOrderMap = buildOrderMap(homeBatterArr);
+    const awayOrderMap = buildOrderMap(awayBatterArr);
 
     let enrichedGs = gs || null;
     if (gs) {
@@ -2593,8 +2634,9 @@ async function fetchLineupDirect(gameId, inning) {
       const baseToName = (val) => (!val || val==='0') ? null : (atkOrderMap[val] || null);
       enrichedGs = {
         ...gs,
-        pitcherName: pcodeMap[gs.pitcher] || null,
-        batterName: pcodeMap[gs.batter] || null,
+        _inningInfo: info,
+        pitcherName: pcodeMap[gs.pitcher] || gs.pitcherName || null,
+        batterName: pcodeMap[gs.batter] || gs.batterName || null,
         base1Name: baseToName(gs.base1),
         base2Name: baseToName(gs.base2),
         base3Name: baseToName(gs.base3),
@@ -2602,11 +2644,14 @@ async function fetchLineupDirect(gameId, inning) {
     }
 
     return {
-      home: { batters: parseBatters(homeL?.batter), pitchers: parsePitchers(homeL?.pitcher) },
-      away: { batters: parseBatters(awayL?.batter), pitchers: parsePitchers(awayL?.pitcher) },
+      home: { batters: parseBatters(homeBatterArr), pitchers: parsePitchers(homePitcherArr) },
+      away: { batters: parseBatters(awayBatterArr), pitchers: parsePitchers(awayPitcherArr) },
       currentGameState: enrichedGs,
     };
-  } catch(e) { return null; }
+  } catch(e) {
+    console.error('fetchLineupDirect error:', e);
+    return null;
+  }
 }
 
 function openModal(idx,date) {
@@ -2620,7 +2665,7 @@ function openModal(idx,date) {
   renderModal(D()); history.pushState({modal:true},'');
   document.body.style.overflow='hidden';
 
-  // 라인업 & 경기 상황 브라우저 직접 fetch
+  // 라인업 & 경기 상황 브라우저 직접 fetch (SCHEDULED 포함 모든 경기)
   const g = state.modalGame;
   if (g && g.gameId) {
     const inn = g.inning || 1;
