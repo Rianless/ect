@@ -3486,21 +3486,50 @@ window.openRelay = async function(gameId, away, home, inn) {
     }, 20000);
   }
 
-  // 헤더 영역 스와이프로만 닫기 (relay-body 스크롤과 충돌 방지)
-  const box2 = document.getElementById('relay-box');
-  const relayHeader = document.getElementById('relay-header');
-  if (relayHeader) {
-    let _rty = null;
-    relayHeader.ontouchstart = e => { _rty = e.touches[0].clientY; };
-    relayHeader.ontouchmove = e => { e.stopPropagation(); };
-    relayHeader.ontouchend = e => {
+  // 헤더 + 다이아몬드 영역: 아래 스와이프로 닫기
+  // relay-body: 스크롤만 허용
+  const _swipeTargets = [
+    document.getElementById('relay-header'),
+    document.getElementById('relay-diamond'),
+    document.getElementById('relay-inn-tabs'),
+  ];
+
+  let _rty = null, _isDragging = false;
+  const panel2 = document.getElementById('relay-panel');
+  const box2   = document.getElementById('relay-box');
+
+  _swipeTargets.forEach(el => {
+    if (!el) return;
+    el.ontouchstart = e => {
+      _rty = e.touches[0].clientY;
+      _isDragging = false;
+    };
+    el.ontouchmove = e => {
+      if (_rty === null) return;
+      const dy = e.touches[0].clientY - _rty;
+      if (dy > 8) {
+        _isDragging = true;
+        // 팝업을 손가락 따라 내리기
+        if (box2) box2.style.transform = `translateY(${Math.max(0, dy)}px)`;
+        e.preventDefault();
+      }
+    };
+    el.ontouchend = e => {
       if (_rty === null) return;
       const dy = e.changedTouches[0].clientY - _rty;
-      if (dy > 50) closeRelay();
-      _rty = null;
+      if (_isDragging && dy > 80) {
+        // 충분히 내렸으면 닫기
+        if (box2) box2.style.transform = '';
+        closeRelay();
+      } else {
+        // 복원
+        if (box2) { box2.style.transition = 'transform 0.25s ease'; box2.style.transform = ''; setTimeout(() => { if(box2) box2.style.transition = ''; }, 260); }
+      }
+      _rty = null; _isDragging = false;
     };
-  }
-  // relay-body는 스크롤만 허용 (닫기 제스처 없음)
+  });
+
+  // relay-body는 스크롤만 허용
   const relayBody2 = document.getElementById('relay-body');
   if (relayBody2) {
     relayBody2.ontouchstart = e => e.stopPropagation();
