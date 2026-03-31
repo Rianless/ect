@@ -3186,13 +3186,22 @@ function renderRelayDiamond(gs, lineup, away, home) {
     <div style="padding:10px 14px 8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-size:11px;color:${dark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.45)'};font-weight:600">⚾ ${pitcherName||'투수'}</div>
-        <div style="display:flex;align-items:center;gap:5px">
-          ${[0,1,2,3].map(i=>`<div style="width:11px;height:11px;border-radius:50%;background:${i<balls?'#00C864':'transparent'};border:1.5px solid ${i<balls?'#00C864':'rgba(0,0,0,0.2)'}"></div>`).join('')}
-          <span style="font-size:10px;color:rgba(0,0,0,0.25);margin:0 2px">|</span>
-          ${[0,1].map(i=>`<div style="width:11px;height:11px;border-radius:50%;background:${i<strikes?'#FFB300':'transparent'};border:1.5px solid ${i<strikes?'#FFB300':'rgba(0,0,0,0.2)'}"></div>`).join('')}
-          <span style="font-size:10px;color:rgba(0,0,0,0.25);margin:0 2px">|</span>
-          ${[0,1,2].map(i=>`<div style="width:11px;height:11px;border-radius:50%;background:${i<outs?'#E31837':'transparent'};border:1.5px solid ${i<outs?'#E31837':'rgba(0,0,0,0.2)'}"></div>`).join('')}
-          <span style="font-size:12px;font-weight:800;color:${dark?'#fff':'#0A0E1A'};margin-left:8px">${inningDisp}</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+            <div style="display:flex;gap:3px">${[0,1,2,3].map(i=>`<div style="width:10px;height:10px;border-radius:50%;background:${i<balls?'#00C864':'transparent'};border:1.5px solid ${i<balls?'#00C864':'rgba(0,0,0,0.22)'}"></div>`).join('')}</div>
+            <span style="font-size:8px;color:${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.35)'}">볼</span>
+          </div>
+          <span style="color:rgba(0,0,0,0.2);font-size:11px">|</span>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+            <div style="display:flex;gap:3px">${[0,1].map(i=>`<div style="width:10px;height:10px;border-radius:50%;background:${i<strikes?'#FFB300':'transparent'};border:1.5px solid ${i<strikes?'#FFB300':'rgba(0,0,0,0.22)'}"></div>`).join('')}</div>
+            <span style="font-size:8px;color:${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.35)'}">스</span>
+          </div>
+          <span style="color:rgba(0,0,0,0.2);font-size:11px">|</span>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+            <div style="display:flex;gap:3px">${[0,1,2].map(i=>`<div style="width:10px;height:10px;border-radius:50%;background:${i<outs?'#E31837':'transparent'};border:1.5px solid ${i<outs?'#E31837':'rgba(0,0,0,0.22)'}"></div>`).join('')}</div>
+            <span style="font-size:8px;color:${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.35)'}">아웃</span>
+          </div>
+          <span style="font-size:12px;font-weight:800;color:${dark?'#fff':'#0A0E1A'};margin-left:4px">${inningDisp}</span>
         </div>
         <div style="font-size:11px;color:${dark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.45)'};font-weight:600">🏏 ${batterName||'타자'}</div>
       </div>
@@ -3306,15 +3315,16 @@ function renderRelayText(relays, away, home) {
 function updateRelayUI() {
   const dark = state.dark;
   const game = _relayData || {};
-  // currentGameState: 직접 필드 또는 textRelays 마지막 항목에서 추출
+  // currentGameState: 직접 필드 → textRelays 첫 항목(역순이므로 최신) 순으로 탐색
   let gs = game.currentGameState || null;
   if (!gs && game.textRelays?.length) {
-    // textRelays는 역순으로 저장되어 있으므로 첫 번째가 가장 최근
     for (const relay of game.textRelays) {
+      if (relay.currentGameState) { gs = relay.currentGameState; break; }
       const opts = relay.textOptions || [];
-      const candidate = relay.currentGameState
-        || (opts.length ? opts[opts.length-1]?.currentGameState : null);
-      if (candidate) { gs = candidate; break; }
+      for (let oi = opts.length - 1; oi >= 0; oi--) {
+        if (opts[oi]?.currentGameState) { gs = opts[oi].currentGameState; break; }
+      }
+      if (gs) break;
     }
   }
 
@@ -3426,23 +3436,29 @@ window.switchRelayInn = async function(inn) {
 };
 
 window.openRelay = async function(gameId, away, home, inn) {
-  _relayGameId = gameId; _relayAway = away; _relayHome = home; _relayInn = Number(inn)||1;
-  _relayData = null; // 초기화
-  
+  _relayGameId = gameId; _relayAway = away; _relayHome = home;
+  _relayData = null;
+
+  // 현재 경기 이닝으로 자동 설정 (전달된 inn 대신 SCH 실제 이닝 우선)
+  const schGame = SCH.find(s => String(s.gameId) === String(gameId));
+  const currentInn = schGame?.inning || Number(inn) || 1;
+  _relayInn = currentInn;
+
   const panel = document.getElementById('relay-panel');
   if (panel) panel.style.display = 'flex';
   document.body.style.overflow = 'hidden';
-  // 뒤로가기로 닫을 수 있도록 히스토리 추가
   history.pushState({relay:true},'');
-  
-  // 데이터 로드 전 기본 UI 틀 먼저 표시
+
+  // 로딩 UI 즉시 표시
   updateRelayUI();
-  
-  // 중계 데이터 + lineup 병렬 fetch
+
+  // 중계 데이터 fetch (lineup은 이미 SCH에 있으면 스킵)
+  const needLineup = !schGame?.lineup;
   const [data, luData] = await Promise.all([
     fetchRelayData(gameId, _relayInn),
-    (schGame?.lineup ? Promise.resolve(null) : fetchLineupDirect(gameId, _relayInn)),
+    needLineup ? fetchLineupDirect(gameId, _relayInn) : Promise.resolve(null),
   ]);
+
   if (data) {
     _relayData = data;
   } else {
@@ -3450,21 +3466,20 @@ window.openRelay = async function(gameId, away, home, inn) {
     if (body) body.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(0,0,0,0.35)">중계 데이터를 불러올 수 없습니다.</div>';
   }
   if (luData) {
-    const idx3 = SCH.findIndex(s=>String(s.gameId)===String(gameId));
+    const idx3 = SCH.findIndex(s => String(s.gameId) === String(gameId));
     if (idx3 !== -1) {
-      if (luData.home||luData.away) SCH[idx3].lineup = luData;
+      if (luData.home || luData.away) SCH[idx3].lineup = luData;
       if (luData.currentGameState) SCH[idx3].currentGameState = luData.currentGameState;
     }
   }
   if (data || luData) updateRelayUI();
-  
+
   clearInterval(_relayInterval);
-  const schGame = SCH.find(s=>s.gameId===gameId);
-  if (schGame?.status==='LIVE') {
-    _relayInterval = setInterval(async()=>{
-      const d = await fetchRelayData(gameId,_relayInn);
-      if(d){_relayData=d;updateRelayUI();}
-    }, 30000);
+  if (schGame?.status === 'LIVE') {
+    _relayInterval = setInterval(async () => {
+      const d = await fetchRelayData(gameId, _relayInn);
+      if (d) { _relayData = d; updateRelayUI(); }
+    }, 20000);
   }
 
   // 아래 스와이프로 닫기
