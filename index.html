@@ -1956,7 +1956,11 @@ function renderModal(d) {
   // 이닝 스코어 테이블
   const lInn = lTeam===g.away ? g.awayInnings : g.homeInnings;
   const rInn = rTeam===g.away ? g.awayInnings : g.homeInnings;
-  const hasInn = !isSch && lInn && lInn.some(x=>x>=0);
+  // LIVE/FINAL이면 스코어나 이닝 배열 중 하나라도 있으면 표시
+  const hasInn = !isSch && lInn && (
+    lInn.some(x=>x>=0) ||
+    (isLive && (g.awayScore != null || g.homeScore != null))
+  );
   // H/E/B 값
   const lHit  = lTeam===g.away ? (g.awayHit??'-')  : (g.homeHit??'-');
   const rHit  = rTeam===g.away ? (g.awayHit??'-')  : (g.homeHit??'-');
@@ -2117,7 +2121,10 @@ function renderModal(d) {
             <span style="font-size:15px">🧢</span>
             <span style="font-size:13px;font-weight:800;color:${d.text}">${isLive?'실시간 경기 상황':isFinal?'경기 상황':'경기 상황'}</span>
           </div>
-          ${(isLive||isFinal)?`<button onclick="openRelay('${g.gameId}','${g.away}','${g.home}',${g.inning||1})" style="display:flex;align-items:center;gap:5px;padding:6px 12px;background:#E31837;border:none;border-radius:20px;color:#fff;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer">📋 중계 전체보기</button>`:''}
+          <div style="display:flex;align-items:center;gap:6px">
+            ${isLive?`<button onclick="refreshModalSituation('${g.gameId}','${g.date}','${g.away}','${g.home}')" style="background:rgba(0,0,0,0.07);border:1px solid rgba(0,0,0,0.12);border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center" title="경기 상황 새로고침">🔄</button>`:''}
+            ${(isLive||isFinal)?`<button onclick="openRelay('${g.gameId}','${g.away}','${g.home}',${g.inning||1})" style="display:flex;align-items:center;gap:5px;padding:6px 12px;background:#E31837;border:none;border-radius:20px;color:#fff;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer">📋 중계 전체보기</button>`:''}
+          </div>
         </div>
         ${!hasLU?`<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
           <div style="font-size:24px;margin-bottom:6px">${(isLive||isFinal)?'⏳':'📋'}</div>
@@ -2648,6 +2655,30 @@ async function fetchLineupDirect(gameId, inning) {
     return null;
   }
 }
+
+window.refreshModalSituation = async function(gameId, date, away, home) {
+  const btn = event.currentTarget;
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    // 최신 lineup + 경기상황 다시 fetch
+    const inn = state.modalGame?.inning || 1;
+    const [lineupData] = await Promise.all([
+      fetchLineupDirect(gameId, inn),
+    ]);
+    const idx2 = SCH.findIndex(s => s.date===date && s.away===away && s.home===home);
+    if (idx2 !== -1) {
+      if (lineupData) {
+        if (lineupData.home || lineupData.away) SCH[idx2].lineup = lineupData;
+        if (lineupData.currentGameState) SCH[idx2].currentGameState = lineupData.currentGameState;
+      }
+      state.modalGame = SCH[idx2];
+    }
+    await fetchTodayScores(date);
+    renderModal(D());
+  } finally {
+    if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
+  }
+};
 
 function openModal(idx,date) {
   const dayGs=SCH.filter(g=>g.date===date);
@@ -3194,10 +3225,12 @@ function renderRelayText(relays, away, home) {
     // typeKey: item.type 또는 textOptions[0].type
     const opts = item.textOptions || [];
     const typeKey = item.type ?? (opts.length > 0 ? opts[0]?.type : null);
-    // resultText: 서버에서 추출한 textOptions 마지막 항목 텍스트 (타자 결과)
+    // resultText: textOptions 전체에서 결과 텍스트 수집
     const resultText = item.resultText || '';
-    // 배지 판단에 쓸 전체 텍스트 (title + resultText 합산)
-    const fullText = title + ' ' + resultText;
+    // textOptions 전체 텍스트 합산 (더 풍부한 결과 포함)
+    const optsAllText = opts.map(o => o.text || o.title || '').join(' ');
+    // 배지 판단에 쓸 전체 텍스트
+    const fullText = title + ' ' + resultText + ' ' + optsAllText;
     // 스코어: textOptions 마지막 항목 또는 item 자체
     const last = opts.length > 0 ? opts[opts.length-1] : item;
     const gs2 = last?.currentGameState || item.currentGameState;
@@ -3273,7 +3306,17 @@ function renderRelayText(relays, away, home) {
 function updateRelayUI() {
   const dark = state.dark;
   const game = _relayData || {};
-  const gs = game.currentGameState || null;
+  // currentGameState: 직접 필드 또는 textRelays 마지막 항목에서 추출
+  let gs = game.currentGameState || null;
+  if (!gs && game.textRelays?.length) {
+    // textRelays는 역순으로 저장되어 있으므로 첫 번째가 가장 최근
+    for (const relay of game.textRelays) {
+      const opts = relay.textOptions || [];
+      const candidate = relay.currentGameState
+        || (opts.length ? opts[opts.length-1]?.currentGameState : null);
+      if (candidate) { gs = candidate; break; }
+    }
+  }
 
   // gs에 inningInfo 주입 (renderRelayDiamond에서 수비팀 판별용)
   // currentGameState 안의 다양한 필드 + game.inningInfo 모두 확인
