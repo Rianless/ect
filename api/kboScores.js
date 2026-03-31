@@ -144,9 +144,9 @@ export default async function handler(req, res) {
         base1:  bestGs.base1  ?? bestGs.runner1      ?? 0,
         base2:  bestGs.base2  ?? bestGs.runner2      ?? 0,
         base3:  bestGs.base3  ?? bestGs.runner3      ?? 0,
-        // 투수/타자 이름 정규화
-        pitcherName: bestGs.pitcherName || bestGs.currentPitcherName || bestGs.pitcher || '',
-        batterName:  bestGs.batterName  || bestGs.currentBatterName  || bestGs.batter  || '',
+        // 투수/타자 이름 정규화 (숫자 ID는 이름으로 사용하지 않음)
+        pitcherName: [bestGs.pitcherName, bestGs.currentPitcherName].find(v => v && !/^\d+$/.test(String(v))) || '',
+        batterName:  [bestGs.batterName,  bestGs.currentBatterName ].find(v => v && !/^\d+$/.test(String(v))) || '',
       };
     }
 
@@ -242,7 +242,16 @@ export default async function handler(req, res) {
       const td = detail.textRelayData || detail;
       const homeLineup = td.homeLineup || detail.homeLineup || null;
       const awayLineup = td.awayLineup || detail.awayLineup || null;
-      const gs = td.currentGameState || detail.currentGameState || null;
+      let gs = td.currentGameState || detail.currentGameState || null;
+      // currentGameState의 pitcherName/batterName에서 숫자 ID 필터링
+      if (gs) {
+        const isNumId = v => v && /^\d+$/.test(String(v));
+        gs = {
+          ...gs,
+          pitcherName: isNumId(gs.pitcherName) ? '' : (gs.pitcherName || ''),
+          batterName:  isNumId(gs.batterName)  ? '' : (gs.batterName  || ''),
+        };
+      }
       // 응답: 표준화된 구조
       return res.status(200).json({
         homeLineup,
