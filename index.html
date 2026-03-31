@@ -2649,9 +2649,10 @@ async function fetchLineupDirect(gameId, inning) {
     }
 
     // pcode → 이름 맵 (gs 베이스 이름 추출용)
-    const pcodeMap = {};
+    // 서버가 반환한 pcodeMap이 있으면 우선 사용, 없으면 lineup 배열에서 직접 구성
+    const pcodeMap = { ...(result.pcodeMap || {}) };
     const allP = [...(homeL?.batter||[]), ...(homeL?.pitcher||[]), ...(awayL?.batter||[]), ...(awayL?.pitcher||[])];
-    allP.forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name || p.playerName; });
+    allP.forEach(p => { if(p.pcode) pcodeMap[String(p.pcode)] = p.name || p.playerName; });
 
     // 타자 순서맵 (베이스 주자 이름)
     const buildOM = (arr) => {
@@ -2694,6 +2695,7 @@ async function fetchLineupDirect(gameId, inning) {
       home: { batters: _parseBatters(homeL), pitchers: _parsePitchers(homeL) },
       away: { batters: _parseBatters(awayL), pitchers: _parsePitchers(awayL) },
       currentGameState: enrichedGs,
+      pcodeMap,  // 타자/투수 ID 변환용
     };
   } catch(e) {
     console.error('fetchLineupDirect error:', e);
@@ -3500,26 +3502,33 @@ function updateRelayUI() {
     // 타자: 공격팀 현재 타자
     if (!gs._batterName) {
       const isNumeric2 = v => /^\d+$/.test(String(v||''));
-      // 1) currentGameState에서 직접 이름 필드
+      // 1) currentGameState에서 직접 이름 필드 (kboScores에서 이미 pcode 변환 완료)
       const rawB = [gs.batterName, gs.currentBatterName].find(v => v && !isNumeric2(v)) || '';
-      // 2) gs.batter가 숫자 ID일 때 lineup pcodeMap으로 변환
       let batterFromLineup = '';
       if (!rawB && gs.batter) {
         const relayLu3 = schGame2?.lineup;
-        const atkBatters3 = isBottomHalf
-          ? (relayLu3?.home?.batters || [])
-          : (relayLu3?.away?.batters || []);
-        // pcode 기반 매핑 시도
-        const pcMap3 = {};
-        const atkPitchers3 = isBottomHalf
-          ? (relayLu3?.home?.pitchers || [])
-          : (relayLu3?.away?.pitchers || []);
-        // lineup에서 pcode 매핑이 없으면 👉 현재 타자는 공격팀 라인업에서 배팅 순서로 추정
-        // gs.batter가 배팅 순서(1~9)에 해당하면 해당 선수 이름 사용
-        const bOrder = Number(gs.batter);
-        if (bOrder >= 1 && bOrder <= 9) {
-          const bPlayer = atkBatters3.find(p => p.order === bOrder || p.n === bOrder);
-          if (bPlayer?.name) batterFromLineup = bPlayer.name;
+        // 2) relay 데이터의 pcodeMap 사용 (서버가 반환한 것)
+        const relayPcMap = (_relayData?.pcodeMap) || {};
+        const batterId = String(gs.batter);
+        if (relayPcMap[batterId]) {
+          batterFromLineup = relayPcMap[batterId];
+        } else {
+          // 3) SCH lineup의 모든 선수에서 pcode 매핑 구성
+          const schPcMap = {};
+          const allLuP = [
+            ...(relayLu3?.home?.batters||[]), ...(relayLu3?.home?.pitchers||[]),
+            ...(relayLu3?.away?.batters||[]), ...(relayLu3?.away?.pitchers||[]),
+          ];
+          // parseBrowserBatters는 pcode를 저장하지 않으므로, 이름 기반 순서 매핑 시도
+          const atkBatters3 = isBottomHalf
+            ? (relayLu3?.home?.batters || [])
+            : (relayLu3?.away?.batters || []);
+          // 4) gs.batter가 배팅 순서(1~9)에 해당하면 해당 선수 이름 사용
+          const bOrder = Number(gs.batter);
+          if (bOrder >= 1 && bOrder <= 9) {
+            const bPlayer = atkBatters3.find(p => p.order === bOrder || p.n === bOrder);
+            if (bPlayer?.name) batterFromLineup = bPlayer.name;
+          }
         }
       }
       gs._batterName = rawB || batterFromLineup;
@@ -3659,6 +3668,10 @@ window.openRelay = async function(gameId, away, home, inn) {
         if (_infoS.includes('말')) SCH[_idx3].awayPitcher = _pName;
         else SCH[_idx3].homePitcher = _pName;
       }
+    }
+    // lineup fetch에서 얻은 pcodeMap을 relay 데이터에 병합 (타자 이름 변환용)
+    if (luData?.pcodeMap) {
+      _relayData = { ..._relayData, pcodeMap: { ...(_relayData.pcodeMap||{}), ...luData.pcodeMap } };
     }
   } else {
     const body = document.getElementById('relay-body');
