@@ -848,23 +848,39 @@ const FIELD_POSITIONS = new Set(['CF','LF','RF','SS','2B','1B','3B','C','P','DH'
 // 포지션이 실제 수비 포지션인지 확인 (대주자/대타 등 비필드 포지션 제외)
 const isFieldPos = pos => FIELD_POSITIONS.has(pos);
 
-const buildDisplayLineup = lineup => (lineup || []).map((player, idx) => {
-  const starterName = player.starterName || player.name || '';
-  const currentName = player.name || starterName;
-  const starterPos = normalizePositionLabel(player.starterPos || '');
-  const currentPos = normalizePositionLabel(player.pos || player.p || '');
-  // 현재 포지션이 대주자/대타 등 비필드 포지션이면 선발(스타터)의 수비 포지션을 사용
-  const displayPos = isFieldPos(currentPos) ? currentPos : (starterPos || currentPos);
-  const isSub = starterName && starterName !== currentName;
-  const subLabel = player.sub || (isSub ? starterName : null);
-  return {
-    n: player.order || player.n || idx + 1,
-    name: currentName,
-    p: displayPos,
-    pos: displayPos,
-    sub: subLabel,
-  };
-});
+const buildDisplayLineup = lineup => {
+  if (!lineup || !lineup.length) return [];
+  // 1단계: 각 batOrder별 최초(선발) 포지션 수집
+  const orderToStarterPos = {};
+  lineup.forEach(player => {
+    const order = player.order || player.batOrder || player.n;
+    if (!order) return;
+    if (orderToStarterPos[order]) return; // 이미 선발 포지션 있음
+    const sp = normalizePositionLabel(player.starterPos || player.pos || player.p || '');
+    if (isFieldPos(sp)) orderToStarterPos[order] = sp;
+  });
+
+  return lineup.map((player, idx) => {
+    const starterName = player.starterName || player.name || '';
+    const currentName = player.name || starterName;
+    const starterPos = normalizePositionLabel(player.starterPos || '');
+    const currentPos = normalizePositionLabel(player.pos || player.p || '');
+    const order = player.order || player.batOrder || player.n || idx + 1;
+    // 현재 포지션이 비필드이면: starterPos → 같은 타순 선발포지션 → 빈 문자열 순으로 폴백
+    const displayPos = isFieldPos(currentPos) ? currentPos
+      : isFieldPos(starterPos) ? starterPos
+      : (orderToStarterPos[order] || '');
+    const isSub = starterName && starterName !== currentName;
+    const subLabel = player.sub || (isSub ? starterName : null);
+    return {
+      n: order,
+      name: currentName,
+      p: displayPos,
+      pos: displayPos,
+      sub: subLabel,
+    };
+  });
+};
 const formatInningBadge = g => g?.status === 'LIVE' ? (g.inningInfo || (g.inning ? `${g.inning}\uD68C` : 'LIVE')) : '';
 const splitTeamName = team => {
   const full = T[team]?.name || team || '';
@@ -2598,7 +2614,18 @@ function setModalLt(lt){state.modalLt=lt;renderModal(D());}
 document.getElementById('modal-overlay').addEventListener('click',e=>{
   if(e.target===document.getElementById('modal-overlay'))closeModal();
 });
-window.addEventListener('popstate',()=>{if(state.modalGame)closeModal();});
+window.addEventListener('popstate', e => {
+  // relay 패널이 열려있으면 릴레이만 닫기 (모달은 유지)
+  const panel = document.getElementById('relay-panel');
+  if (panel && panel.style.display === 'flex') {
+    panel.style.display = 'none';
+    document.body.style.overflow = '';
+    clearInterval(_relayInterval); _relayInterval = null;
+    return;
+  }
+  // 그 외엔 모달 닫기
+  if (state.modalGame) closeModal();
+});
 
 setInterval(()=>{
   state.clock=new Date();
@@ -2962,11 +2989,17 @@ function renderRelayDiamond(gs, lineup, away, home) {
   const batterName = gs._batterName || '';
   const b1c = base1?'#FFB300':'#d4a44c', b2c = base2?'#FFB300':'#d4a44c', b3c = base3?'#FFB300':'#d4a44c';
 
-  const defLineup = lineup?.away?.batters || [];
+  // 수비팀 결정: lineup에 away/home 모두 있으므로 away 기본 (중계 패널에선 호출측에서 결정)
+  const rawDefBatters = lineup?.away?.batters || [];
+  const defLineup2 = buildDisplayLineup(rawDefBatters);
+  // posSeenMap: 같은 포지션 교체 시 현재 선수만 표시
+  const posSeen2 = {};
+  defLineup2.forEach(p => { if(p.pos && FIELD_POSITIONS.has(p.pos)) posSeen2[p.pos] = p.name; });
+  const defLineup = Object.entries(posSeen2).map(([pos,name])=>({pos,name}));
   const posMap2 = {'중견수':'CF','좌익수':'LF','우익수':'RF','유격수':'SS','2루수':'2B','1루수':'1B','3루수':'3B','포수':'C','투수':'P'};
   const PC3 = {CF:{x:50,y:10},LF:{x:16,y:22},RF:{x:84,y:22},SS:{x:34,y:44},'2B':{x:64,y:44},P:{x:50,y:56},'3B':{x:18,y:64},'1B':{x:82,y:64},C:{x:50,y:82}};
-  const pins2 = defLineup.filter(p=>p.pos&&posMap2[p.pos]).map(p=>{
-    const pos = posMap2[p.pos]; const pt = PC3[pos];
+  const pins2 = defLineup.map(p=>{
+    const pos = posMap2[p.pos] || p.pos; const pt = PC3[pos];
     if (!pt) return '';
     const isP = pos==='P';
     return `<div style="position:absolute;left:${pt.x}%;top:${pt.y}%;transform:translate(-50%,-50%);z-index:3">
@@ -3175,6 +3208,8 @@ window.openRelay = async function(gameId, away, home, inn) {
   const panel = document.getElementById('relay-panel');
   if (panel) panel.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  // 뒤로가기로 닫을 수 있도록 히스토리 추가
+  history.pushState({relay:true},'');
   
   // 데이터 로드 전 기본 UI 틀 먼저 표시
   updateRelayUI();
