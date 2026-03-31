@@ -1290,16 +1290,35 @@ function renderBaseballRecord(d) {
     html += '</div>';
 
 
-    // 대표사진 (첫 장) + 장수 뱃지 - 클릭 시 전체화면 뷰어
+    // 대표사진 (썸네일 그리드) + 삭제 버튼
     const recPhotos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
     if(recPhotos.length > 0) {
       const pj = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
-      html += '<div onclick="event.stopPropagation()" style="margin-bottom:10px;position:relative;border-radius:10px;overflow:hidden;background:#111">';
+      html += '<div onclick="event.stopPropagation()" style="margin-bottom:10px">';
+      // 첫 번째 사진: 크게 + 삭제 버튼
+      html += '<div style="position:relative;border-radius:10px;overflow:hidden;background:#111;margin-bottom:4px">';
       html += '<img src="'+recPhotos[0]+'" onclick="openPhotoViewer(JSON.parse(this.dataset.photos||&quot;[]&quot;),0)" '
         + 'data-photos="'+pj+'" '
         + 'style="width:100%;max-height:220px;object-fit:cover;display:block;cursor:zoom-in"/>';
+      html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\',0)" '
+        + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
+        + 'width:28px;height:28px;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px)">✕</button>';
+      html += '</div>';
+      // 나머지 사진: 작은 썸네일 행
       if(recPhotos.length > 1) {
-        html += '<div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:3px 8px">+' + (recPhotos.length-1) + '장 더</div>';
+        html += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
+        for(let pi=1; pi<recPhotos.length; pi++) {
+          const pjAll = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
+          html += '<div style="position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;background:#111;flex-shrink:0">';
+          html += '<img src="'+recPhotos[pi]+'" onclick="openPhotoViewer(JSON.parse(this.dataset.photos||\'[]\'),'+pi+')" '
+            + 'data-photos="'+pjAll+'" '
+            + 'style="width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in"/>';
+          html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\','+pi+')" '
+            + 'style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
+            + 'width:22px;height:22px;font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px)">✕</button>';
+          html += '</div>';
+        }
+        html += '</div>';
       }
       html += '</div>';
     }
