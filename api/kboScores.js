@@ -79,53 +79,18 @@ export default async function handler(req, res) {
     } catch(e) { return null; }
   }
 
-  // lineup 관련 필드를 재귀적으로 찾기
-  function findLineupFields(obj, depth) {
-    if (!obj || typeof obj !== 'object' || depth > 4) return null;
-    if (obj.homeLineup || obj.awayLineup || obj.homeTeamLineup || obj.awayTeamLineup) return obj;
-    if (obj.home?.batter || obj.away?.batter) return obj;
-    for (const key of Object.keys(obj)) {
-      const found = findLineupFields(obj[key], depth + 1);
-      if (found) return found;
-    }
-    return null;
-  }
-
-  function normalizeLineup(raw) {
-    if (!raw) return null;
-    // 다양한 키 구조 정규화
-    const homeL = raw.homeLineup || raw.homeTeamLineup || raw.home || null;
-    const awayL = raw.awayLineup || raw.awayTeamLineup || raw.away || null;
-    if (!homeL && !awayL) return null;
-    return { ...raw, homeLineup: homeL, awayLineup: awayL };
-  }
-
   async function fetchLineup(gameId, inning) {
     const inn = inning || 1;
     const urls = [
       `https://api-gw.sports.naver.com/schedule/games/${gameId}/lineup`,
       `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`,
-      `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=1&isHighlight=false`,
     ];
     for (const url of urls) {
       try {
         const r = await fetch(url, { headers: HEADERS });
         if (!r.ok) continue;
         const data = await r.json();
-        const result = data?.result;
-        if (!result) continue;
-        // 직접 찾기
-        if (result.homeLineup || result.awayLineup) return normalizeLineup(result) || result;
-        // textRelayData 안
-        if (result.textRelayData) {
-          const td = result.textRelayData;
-          if (td.homeLineup || td.awayLineup) return normalizeLineup(td) || td;
-        }
-        // 재귀 탐색
-        const found = findLineupFields(result, 0);
-        if (found) return normalizeLineup(found) || found;
-        // 어떤 형태든 result 반환
-        return result;
+        if (data?.result) return data.result;
       } catch(e) {}
     }
     return null;
@@ -202,22 +167,6 @@ export default async function handler(req, res) {
     const awayStarter = extractStarterFromDetail('away');
     const homeStarter = extractStarterFromDetail('home');
 
-    // lineup 데이터 구조 정규화 (homeLineup/awayLineup 또는 home/away)
-    let lineupData = null;
-    if (detail) {
-      const hl = detail.homeLineup || detail.homeTeamLineup || (detail.home?.batter ? detail.home : null);
-      const al = detail.awayLineup || detail.awayTeamLineup || (detail.away?.batter ? detail.away : null);
-      // textRelayData 안에도 있을 수 있음
-      const td2 = detail.textRelayData;
-      const hl2 = td2?.homeLineup || td2?.homeTeamLineup;
-      const al2 = td2?.awayLineup || td2?.awayTeamLineup;
-      const finalHL = hl || hl2;
-      const finalAL = al || al2;
-      if (finalHL || finalAL) {
-        lineupData = { homeLineup: finalHL, awayLineup: finalAL };
-      }
-    }
-
     return {
       gameId: String(g.gameId || ""),
       date: g.gameDate || '',
@@ -227,13 +176,12 @@ export default async function handler(req, res) {
       homeScore: g.homeTeamScore!=null ? Number(g.homeTeamScore) : null,
       awayInnings, homeInnings,
       inningInfo: g.statusInfo || null,
-      currentGameState: detail?.currentGameState || detail?.textRelayData?.currentGameState || null,
+      currentGameState: detail?.currentGameState || null,
       textRelays: textRelaysData,
       awayStarter,
       homeStarter,
       winPitcher: gameData.winPitcherName || g.winPitcherName || null,
       losePitcher: gameData.losePitcherName || g.losePitcherName || null,
-      lineup: lineupData,
     };
   }
 
@@ -243,9 +191,27 @@ export default async function handler(req, res) {
     const action = req.query.action || '';
 
     if (gameId && action === 'lineup') {
-      const result = await fetchLineup(gameId, inning);
-      if (!result) return res.status(404).json({ error: 'Lineup not found' });
-      return res.status(200).json(result);
+      // game-polling으로 textRelayData 포함 전체 응답 가져오기
+      const inn = inning || 1;
+      const detail = await fetchGameDetail(gameId, inn);
+      if (!detail) {
+        // fallback: lineup 전용 API
+        const lineupRaw = await fetchLineup(gameId, inn);
+        if (!lineupRaw) return res.status(404).json({ error: 'Lineup not found' });
+        return res.status(200).json(lineupRaw);
+      }
+      // textRelayData 안의 homeLineup/awayLineup 추출
+      const td = detail.textRelayData || detail;
+      const homeLineup = td.homeLineup || detail.homeLineup || null;
+      const awayLineup = td.awayLineup || detail.awayLineup || null;
+      const gs = td.currentGameState || detail.currentGameState || null;
+      // 응답: 표준화된 구조
+      return res.status(200).json({
+        homeLineup,
+        awayLineup,
+        currentGameState: gs,
+        _raw_keys: Object.keys(td).slice(0, 20),
+      });
     }
 
     if (gameId) {
