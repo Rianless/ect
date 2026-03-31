@@ -158,99 +158,6 @@
 </div>
 
 <script>
-// ═══════════════════════════════════════════
-// 사진 저장소: IndexedDB (용량 제한 없음)
-// ═══════════════════════════════════════════
-const _photoDB = (function() {
-  let _db = null;
-  const _cache = {}; // { key: [base64,...] } 메모리 캐시
-
-  function open() {
-    if (_db) return Promise.resolve(_db);
-    return new Promise((res, rej) => {
-      const req = indexedDB.open('kbo_photos', 1);
-      req.onupgradeneeded = e => {
-        e.target.result.createObjectStore('photos', { keyPath: 'key' });
-      };
-      req.onsuccess = e => { _db = e.target.result; res(_db); };
-      req.onerror = () => rej(req.error);
-    });
-  }
-
-  return {
-    // 사진 배열 읽기 (캐시 우선)
-    get: async function(key) {
-      if (_cache[key] !== undefined) return _cache[key];
-      try {
-        const db = await open();
-        return new Promise(res => {
-          const req = db.transaction('photos','readonly').objectStore('photos').get(key);
-          req.onsuccess = () => {
-            const photos = req.result ? req.result.photos : [];
-            _cache[key] = photos;
-            res(photos);
-          };
-          req.onerror = () => res([]);
-        });
-      } catch(e) { return []; }
-    },
-    // 사진 배열 저장
-    set: async function(key, photos) {
-      _cache[key] = photos;
-      try {
-        const db = await open();
-        return new Promise(res => {
-          const tx = db.transaction('photos','readwrite');
-          tx.objectStore('photos').put({ key, photos });
-          tx.oncomplete = () => res(true);
-          tx.onerror = () => res(false);
-        });
-      } catch(e) { return false; }
-    },
-    // 캐시에서 동기 읽기 (렌더링용 - get() 이후에만 유효)
-    getCached: function(key) {
-      return _cache[key] || [];
-    },
-    // 모든 키 프리로드 (앱 시작 시 1회)
-    preloadAll: async function() {
-      try {
-        const db = await open();
-        return new Promise(res => {
-          const req = db.transaction('photos','readonly').objectStore('photos').getAll();
-          req.onsuccess = () => {
-            (req.result || []).forEach(r => { _cache[r.key] = r.photos; });
-            res();
-          };
-          req.onerror = () => res();
-        });
-      } catch(e) {}
-    },
-    // localStorage 기존 photos 마이그레이션
-    migrate: async function() {
-      const keys = [];
-      for(let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
-        if(k && k.startsWith('m_')) keys.push(k);
-      }
-      for(const k of keys) {
-        try {
-          const d = JSON.parse(localStorage.getItem(k)||'{}');
-          if(d.photos && d.photos.length) {
-            await this.set(k, d.photos);
-            delete d.photos;
-            delete d.photo;
-            localStorage.setItem(k, JSON.stringify(d));
-          } else if(d.photo) {
-            await this.set(k, [d.photo]);
-            delete d.photo;
-            localStorage.setItem(k, JSON.stringify(d));
-          }
-        } catch(e) {}
-      }
-    }
-  };
-})();
-
 const T = {
   KIA:{name:"KIA 타이거즈",color:"#E31837",img:"https://raw.githubusercontent.com/Rianless/kbo/main/images/tigers.png"},
   삼성:{name:"삼성 라이온즈",color:"#1E4489",img:"https://raw.githubusercontent.com/Rianless/kbo/main/images/lions.png"},
@@ -1300,8 +1207,7 @@ function renderBaseballRecord(d) {
     const memoKey = 'm_'+g.date+'_'+g.away+'_'+g.home;
     let memoData = {};
     try { memoData = JSON.parse(localStorage.getItem(memoKey)||'{}'); if(typeof memoData==='string') memoData={text:memoData}; } catch(e) {}
-    memoData.photos = _photoDB.getCached(memoKey);
-    delete memoData.photo;
+
     const [yr2,mo2,da2] = g.date.split('-');
     const dw2 = ['일','월','화','수','목','금','토'][new Date(g.date+'T12:00:00').getDay()];
 
@@ -1383,32 +1289,21 @@ function renderBaseballRecord(d) {
     });
     html += '</div>';
 
-    // 사진 슬라이더 (버튼 전환 방식)
+
+    // 대표사진 (첫 장) + 장수 뱃지 - 클릭 시 전체화면 뷰어
     const recPhotos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
     if(recPhotos.length > 0) {
-      const slideId = 'slide-'+memoId;
       const pj = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
-      html += '<div class="rec-photo-wrap" style="margin-bottom:10px">';
-      html += '<div id="'+slideId+'" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111">';
-      recPhotos.forEach(function(src, pi) {
-        html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+';position:relative">';
-        html += '<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(\''+slideId+'\')" '
-          + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>';
-        // ✕ 삭제 버튼 (각 슬라이드 아이템 안에 위치)
-        html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\','+pi+')" '
-          + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
-          + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>';
-        html += '</div>';
-      });
-      // 좌우 버튼 + 카운터는 sl-item 밖에 하나만 생성 (버튼 중복 발화 방지)
+      html += '<div onclick="event.stopPropagation()" style="margin-bottom:10px;position:relative;border-radius:10px;overflow:hidden;background:#111">';
+      html += '<img src="'+recPhotos[0]+'" onclick="openPhotoViewer(JSON.parse(this.parentElement.dataset.photos||&quot;[]&quot;),0)" '
+        + 'data-photos="'+pj+'" '
+        + 'style="width:100%;max-height:220px;object-fit:cover;display:block;cursor:zoom-in"/>';
       if(recPhotos.length > 1) {
-        html += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">';
-        html += '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+recPhotos.length+'</span>';
-        html += '</div>';
+        html += '<div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:3px 8px">+' + (recPhotos.length-1) + '장 더</div>';
       }
       html += '</div>';
-      html += '</div>';
     }
+
 
     // 텍스트 메모 textarea (oninput → 즉시 저장)
     html += '<textarea id="'+memoId+'" '
@@ -1451,21 +1346,10 @@ window.saveRecordMemoEl = function(el) {
 
 function _recGetMemo(date, away, home) {
   const key = 'm_'+date+'_'+away+'_'+home;
-  try {
-    const d = JSON.parse(localStorage.getItem(key)||'{}');
-    const base = typeof d==='string'?{text:d}:d;
-    // 사진은 IndexedDB 캐시에서 병합
-    base.photos = _photoDB.getCached(key);
-    delete base.photo;
-    return base;
-  } catch(e) { return { photos: _photoDB.getCached('m_'+date+'_'+away+'_'+home) }; }
+  try { const d = JSON.parse(localStorage.getItem(key)||'{}'); return typeof d==='string'?{text:d}:d; } catch(e) { return {}; }
 }
 function _recSaveMemo(date, away, home, data) {
-  const key = 'm_'+date+'_'+away+'_'+home;
-  const toSave = {...data};
-  delete toSave.photos; // 사진은 localStorage에 저장 안 함
-  delete toSave.photo;
-  localStorage.setItem(key, JSON.stringify(toSave));
+  localStorage.setItem('m_'+date+'_'+away+'_'+home, JSON.stringify(data));
 }
 
 window.recSetWatch = function(date, away, home, v) {
@@ -1485,66 +1369,31 @@ window.recSetWatch = function(date, away, home, v) {
 };
 
 window.recDeletePhoto = function(date, away, home, idx) {
-  const key = 'm_'+date+'_'+away+'_'+home;
-  const photos = [..._photoDB.getCached(key)];
+  const data = _recGetMemo(date, away, home);
+  const photos = data.photos || (data.photo ? [data.photo] : []);
   photos.splice(idx, 1);
-  _photoDB.set(key, photos).then(() => {
-    const memoId = 'rec-memo-'+date+'-'+away+'-'+home;
-    const container = document.getElementById(memoId)?.closest('.rec-photo-wrap');
-    if(container) {
-      _recRenderPhotos(container, photos, date, away, home);
-    } else {
-      render();
-    }
-  });
+  data.photos = photos;
+  delete data.photo;
+  _recSaveMemo(date, away, home, data);
+  render();
 };
 
 window.recUploadPhoto = function(input, date, away, home) {
   if (!input.files || !input.files.length) return;
   const files = Array.from(input.files);
   _compressAll(files, function(results) {
-    const key = 'm_'+date+'_'+away+'_'+home;
-    const existing = _photoDB.getCached(key);
-    const newPhotos = [...existing, ...results];
-    _photoDB.set(key, newPhotos).then(() => {
-      _recSaveMemo(date, away, home, _recGetMemo(date, away, home)); // 텍스트/watch 유지
-      render();
-    });
+    const data = _recGetMemo(date, away, home);
+    const existing = data.photos || (data.photo ? [data.photo] : []);
+    data.photos = [...existing, ...results];
+    delete data.photo;
+    _recSaveMemo(date, away, home, data);
+    render();
     input.value = '';
   });
 };
 
 function _recRenderPhotos(container, photos, date, away, home) {
-  if(!container) return;
-  if(!photos || !photos.length) { container.innerHTML = ''; return; }
-  const memoId = 'rec-memo-'+date+'-'+away+'-'+home;
-  const slideId = 'slide-'+memoId;
-  const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-  let html = '<div id="'+slideId+'" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111">';
-  photos.forEach(function(src, pi) {
-    html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+';position:relative">'
-      + '<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(\''+slideId+'\')" '
-      + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
-      // ✕ 삭제 버튼만 각 슬라이드 안에 위치
-      + '<button onclick="event.stopPropagation();recDeletePhoto(\''+date+'\',\''+away+'\',\''+home+'\','+pi+')" '
-      + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
-      + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>'
-      + '</div>';
-  });
-  // 좌우 버튼 + 카운터는 sl-item 밖에 하나만 생성 (버튼 중복 발화 방지)
-  if(photos.length > 1) {
-    html += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
-      + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+photos.length+'</span>'
-      + '</div>';
-  }
-  html += '</div>';
-  container.innerHTML = html;
-  // DOM 업데이트 후 터치 핸들러 재등록
-  const newWrap = container.querySelector('[id^="slide-"]');
-  if (newWrap && !newWrap.dataset.touchInit) {
-    newWrap.dataset.touchInit = '1';
-    _initSlideTouch(newWrap);
-  }
+  // 사용 안 함 - render()로 대체
 }
 
 function renderMemos(d) {
@@ -1558,7 +1407,7 @@ function renderMemos(d) {
         const date=parts[0], away=parts[1], home=parts[2];
         let memoData={};
         try{ memoData=JSON.parse(raw); if(typeof memoData==='string') memoData={text:raw}; }catch(e){ memoData={text:raw}; }
-        const photos = _photoDB.getCached('m_'+date+'_'+away+'_'+home);
+        const photos = [];
         if(memoData.text||photos.length||memoData.watch)
           memos.push({date,away,home,memo:memoData.text||'',watch:memoData.watch||'',photos});
       }
@@ -1587,20 +1436,12 @@ function renderMemos(d) {
     if(m.watch) html += '<span style="font-size:10px;font-weight:700;background:'+(m.watch==='직관'?'rgba(227,24,55,0.1)':'rgba(0,120,255,0.1)')+';color:'+(m.watch==='직관'?'#E31837':'#0078ff')+';border-radius:5px;padding:2px 7px;margin-bottom:6px;display:inline-block">'+(m.watch==='직관'?'⚾ 직관':'📺 집관')+'</span>';
     if(m.memo) html += '<div style="font-size:13px;color:'+d.text+';line-height:1.6;white-space:pre-wrap;margin-top:4px">'+m.memo+'</div>';
     if(m.photos&&m.photos.length){
-      const memoId='rec-memo-'+m.date+'-'+m.away+'-'+m.home;
-      const slideId='slide-'+memoId;
       const pj=JSON.stringify(m.photos).replace(/"/g,'&quot;');
-      html+='<div onclick="event.stopPropagation()" style="margin-top:8px;border-radius:10px;overflow:hidden;background:#111;position:relative" id="'+slideId+'" data-cur="0" data-photos="'+pj+'">';
-      m.photos.forEach(function(src,pi){
-        html+='<div class="sl-item" style="display:'+(pi===0?'block':'none')+'">'
-          +'<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(this.closest(&quot;[id^=slide-]&quot;).id)" '
-          +'style="width:100%;height:auto;max-height:220px;object-fit:contain;display:block;cursor:zoom-in"/>'
-          +'</div>';
-      });
+      html+='<div onclick="event.stopPropagation()" style="margin-top:8px;position:relative;border-radius:10px;overflow:hidden;background:#111">';
+      html+='<img src="'+m.photos[0]+'" onclick="openPhotoViewer(JSON.parse(this.parentElement.dataset.photos||&quot;[]&quot;),0)" '
+        +'data-photos="'+pj+'" style="width:100%;max-height:200px;object-fit:cover;display:block;cursor:zoom-in"/>';
       if(m.photos.length>1){
-        html+='<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
-          +'<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:2px 8px">1/'+m.photos.length+'</span>'
-          +'</div>';
+        html+='<div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:3px 8px">+'+(m.photos.length-1)+'장 더</div>';
       }
       html+='</div>';
     }
@@ -2092,8 +1933,7 @@ function renderModal(d) {
   const memoRaw=localStorage.getItem(`m_${g.date}_${g.away}_${g.home}`)||'{}';
   let memoData={};
   try{ memoData=JSON.parse(memoRaw); if(typeof memoData==='string') memoData={text:memoRaw}; }catch(e){ memoData={text:memoRaw}; }
-  memoData.photos = _photoDB.getCached(`m_${g.date}_${g.away}_${g.home}`);
-  delete memoData.photo;
+
   const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
 
   // 이닝 스코어 테이블
@@ -2632,49 +2472,40 @@ function renderModal(d) {
     if(!input||!input.files||!input.files.length) return;
     const files = Array.from(input.files);
     _compressAll(files, function(results) {
-      const existing = _photoDB.getCached(memoKey);
-      const newPhotos = [...existing, ...results];
-      _photoDB.set(memoKey, newPhotos).then(() => {
-        _refreshMemoPhotoPreview(newPhotos);
-      });
+      const data = getMemoData();
+      const existing = data.photos || (data.photo ? [data.photo] : []);
+      data.photos = [...existing, ...results];
+      delete data.photo;
+      saveMemoData(data);
+      _refreshMemoPhotoPreview(data.photos);
       input.value = '';
     });
   };
   window.deleteMemoPhoto = function(idx) {
-    const photos = [..._photoDB.getCached(memoKey)];
+    const data = getMemoData();
+    const photos = data.photos || (data.photo ? [data.photo] : []);
     photos.splice(idx, 1);
-    _photoDB.set(memoKey, photos).then(() => {
-      _refreshMemoPhotoPreview(photos);
-    });
+    data.photos = photos;
+    delete data.photo;
+    saveMemoData(data);
+    _refreshMemoPhotoPreview(photos);
   };
   function _refreshMemoPhotoPreview(photos) {
     const preview = document.getElementById('memo-photo-preview');
     if(!preview) return;
     if(!photos || !photos.length) { preview.innerHTML = ''; return; }
     const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-    let h = '<div id="memo-slide" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
-    photos.forEach(function(src, i) {
-      h += '<div class="sl-item" style="display:'+(i===0?'block':'none')+';position:relative">'
-        + '<img src="'+src+'" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
-        + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
-        + '</div>';
-    });
+    let h = '<div style="position:relative;border-radius:10px;overflow:hidden;background:#111">';
+    h += '<img src="'+photos[0]+'" style="width:100%;max-height:260px;object-fit:cover;display:block;cursor:zoom-in;border-radius:10px" data-photos="'+pj+'"/>';
     if(photos.length > 1) {
-      h += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
-        + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+photos.length+'</span>'
-        + '</div>';
+      h += '<div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:3px 8px">+'+(photos.length-1)+'장 더</div>';
     }
+    h += '<button onclick="deleteMemoPhoto(0)" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>';
     h += '</div>';
     preview.innerHTML = h;
-    // 사진 클릭 → 전체화면 뷰어
-    const slide = document.getElementById('memo-slide');
-    if(slide) {
-      slide.querySelectorAll('img').forEach(function(img, i) {
-        img.addEventListener('click', function() {
-          openPhotoViewer(photos, i);
-        });
-      });
-    }
+    preview.querySelector('img').addEventListener('click', function() {
+      openPhotoViewer(photos, 0);
+    });
   }
 
   document.getElementById('memo-input').addEventListener('input', e => {
@@ -4237,70 +4068,14 @@ function _compressAll(files, cb) {
   });
 }
 
-// 슬라이드 현재 인덱스를 JS Map으로 관리 (DOM dataset 의존 제거)
-const _slideState = new Map();
 
-window.recSlide = function(slideId, dir) {
-  const wrap = document.getElementById(slideId);
-  if (!wrap) return;
-  const items = wrap.querySelectorAll('.sl-item');
-  const total = items.length;
-  if (!total) return;
-  // Map에서 현재 인덱스 읽기 (없으면 data-cur 또는 0)
-  let cur = _slideState.has(slideId) ? _slideState.get(slideId) : (parseInt(wrap.dataset.cur) || 0);
-  items[cur].style.display = 'none';
-  cur = (cur + dir + total) % total;
-  items[cur].style.display = 'block';
-  // Map과 dataset 모두 업데이트
-  _slideState.set(slideId, cur);
-  wrap.dataset.cur = cur;
-  const counter = wrap.querySelector('.sl-counter');
-  if (counter) counter.textContent = (cur + 1) + ' / ' + total;
-};
 
-window.recOpenPhoto = function(slideId) {
-  const wrap = document.getElementById(slideId);
-  if (!wrap) return;
-  const photos = JSON.parse(wrap.dataset.photos || '[]');
-  const cur = _slideState.has(slideId) ? _slideState.get(slideId) : (parseInt(wrap.dataset.cur) || 0);
-  openPhotoViewer(photos, cur);
-};
 
-function _initSlideTouch(wrap) {
-  if (!wrap) return;
-  let tx = null;
-  wrap.addEventListener('touchstart', function(e) {
-    tx = e.touches[0].clientX;
-    e.stopPropagation();
-  }, { passive: true });
-  wrap.addEventListener('touchend', function(e) {
-    if (tx === null) return;
-    const dx = e.changedTouches[0].clientX - tx;
-    tx = null;
-    e.stopPropagation();
-    if (Math.abs(dx) > 40) recSlide(wrap.id, dx < 0 ? 1 : -1);
-  }, { passive: true });
-  wrap.addEventListener('click', function(e) { e.stopPropagation(); });
-}
 
-document.addEventListener('renderDone', function() {
-  // 사진 슬라이드 터치 핸들러
-  document.querySelectorAll('[id^="slide-"]').forEach(function(wrap) {
-    if (!wrap.dataset.touchInit) {
-      wrap.dataset.touchInit = '1';
-      _initSlideTouch(wrap);
-    }
-  });
-});
 
-// IndexedDB 프리로드 후 렌더 (기존 데이터 마이그레이션 포함)
-_photoDB.migrate().then(() => _photoDB.preloadAll()).then(() => {
-  render();
-  _initFetch.then(() => render()).catch(() => {});
-}).catch(() => {
-  render();
-  _initFetch.then(() => render()).catch(() => {});
-});
+
+render();
+_initFetch.then(() => render()).catch(() => {});
 </script>
 
 </body>
