@@ -1409,6 +1409,9 @@ window.recUploadPhoto = function(input, date, away, home) {
       alert('저장 공간이 부족해요. 사진을 줄이거나 일부를 삭제해 주세요.');
       return;
     }
+    const newIdx = data.photos.length - 1;
+    const slideId = 'slide-rec-memo-'+date+'-'+away+'-'+home;
+    _slideState.set(slideId, newIdx);
     render();
     input.value = '';
   });
@@ -2516,6 +2519,7 @@ function renderModal(d) {
         alert('저장 공간이 부족해요. 사진을 줄이거나 일부를 삭제해 주세요.');
         return;
       }
+      window._memoSlideCur = data.photos.length - 1; // 새 사진 = 마지막 장으로
       _refreshMemoPhotoPreview(data.photos);
       input.value = '';
     });
@@ -2534,9 +2538,11 @@ function renderModal(d) {
     if(!preview) return;
     if(!photos || !photos.length) { preview.innerHTML = ''; return; }
     const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-    let h = '<div id="memo-slide" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
+    const msCur = window._memoSlideCur || 0;
+    window._memoSlideCur = 0; // 소비 후 리셋
+    let h = '<div id="memo-slide" data-cur="'+msCur+'" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
     photos.forEach(function(src, i) {
-      h += '<div class="sl-item" style="display:'+(i===0?'block':'none')+';position:relative">'
+      h += '<div class="sl-item" style="display:'+(i===msCur?'block':'none')+';position:relative">'
         + '<img src="'+src+'" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
         + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
         + '</div>';
@@ -4166,6 +4172,20 @@ function _initSlideTouch(wrap) {
 }
 
 document.addEventListener('renderDone', function() {
+  // _slideState에 저장된 인덱스로 슬라이드 복원
+  document.querySelectorAll('[id^="slide-"]').forEach(function(wrap) {
+    const sid = wrap.id;
+    if(_slideState.has(sid)) {
+      const cur = _slideState.get(sid);
+      const items = wrap.querySelectorAll('.sl-item');
+      if(items.length > cur) {
+        items.forEach(function(it,i){ it.style.display = i===cur?'block':'none'; });
+        wrap.dataset.cur = cur;
+        const counter = wrap.querySelector('.sl-counter');
+        if(counter) counter.textContent = (cur+1)+' / '+items.length;
+      }
+    }
+  });
   // 사진 슬라이드 터치 핸들러
   document.querySelectorAll('[id^="slide-"]').forEach(function(wrap) {
     if (!wrap.dataset.touchInit) {
