@@ -118,6 +118,17 @@ export default async function handler(req, res) {
       resultText: extractResult(item),
     }));
 
+    // currentGameState: detail 직접 필드 또는 textRelays에서 추출
+    let bestGs = detail?.currentGameState || detail?.textRelayData?.currentGameState || null;
+    if (!bestGs && rawRelays.length) {
+      for (const relay of rawRelays) {
+        const opts = relay.textOptions || [];
+        const candidate = relay.currentGameState
+          || (opts.length ? opts[opts.length-1]?.currentGameState : null);
+        if (candidate) { bestGs = candidate; break; }
+      }
+    }
+
     // 선발투수: 네이버 lineup API 응답의 다양한 경로 커버
     function extractStarterFromDetail(side) {
       if (!detail) return null;
@@ -168,10 +179,9 @@ export default async function handler(req, res) {
     const homeStarter = extractStarterFromDetail('home');
 
     // currentGameState에 inningInfo 주입 (프론트에서 초/말 판별용)
-    const rawGs = detail?.currentGameState || null;
-    const enrichedGs = rawGs ? {
-      ...rawGs,
-      _inningInfo: g.statusInfo || rawGs.inningDisplay || rawGs.inningText || '',
+    const enrichedGs = bestGs ? {
+      ...bestGs,
+      _inningInfo: g.statusInfo || bestGs.inningDisplay || bestGs.inningText || '',
     } : null;
 
     return {
@@ -232,18 +242,18 @@ export default async function handler(req, res) {
     }
 
     const rawGames = await fetchSchedule(todayDash);
-    // 선발 정보를 위해 lineup API 병렬 호출 (BEFORE/STARTED/RESULT 모두)
+    // LIVE/RESULT 경기는 game-polling으로 이닝 스코어+currentGameState 확보
+    // BEFORE 경기는 lineup으로 선발 정보만 확보
     const detailMap = {};
     await Promise.all(rawGames.map(async g => {
       try {
-        const lineupResult = await fetchLineup(g.gameId, 1);
-        if (lineupResult) {
-          detailMap[g.gameId] = lineupResult;
-          // 디버그: 첫 번째 경기 lineup 응답 키 로깅
-          if (rawGames.indexOf(g) === 0) {
-            console.log('[DEBUG lineup keys]', Object.keys(lineupResult));
-            console.log('[DEBUG lineup sample]', JSON.stringify(lineupResult).slice(0, 500));
-          }
+        if (g.statusCode === 'STARTED' || g.statusCode === 'RESULT') {
+          const inn = g.statusCode === 'RESULT' ? 9 : 1;
+          const d = await fetchGameDetail(g.gameId, inn);
+          if (d) detailMap[g.gameId] = d;
+        } else {
+          const lu = await fetchLineup(g.gameId, 1);
+          if (lu) detailMap[g.gameId] = lu;
         }
       } catch(e) {}
     }));
