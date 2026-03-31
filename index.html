@@ -2461,27 +2461,16 @@ function prevMo(){if(state.mo===1){state.yr--;state.mo=12;}else state.mo--;rende
 function nextMo(){if(state.mo===12){state.yr++;state.mo=1;}else state.mo++;render();}
 function selDate(ds){state.sel=ds;render();fetchTodayScores(ds);}
 
-// 브라우저에서 직접 네이버 라인업+경기상황 API 호출
+// 라인업+경기상황: 서버 프록시를 통해 호출 (CORS 방지)
 async function fetchLineupDirect(gameId, inning) {
   if (!gameId) return null;
   const inn = Math.max(1, inning || 1);
   try {
-    const urls = [
-      `https://api-gw.sports.naver.com/schedule/games/${gameId}/lineup`,
-      `https://api-gw.sports.naver.com/game/${gameId}/lineup`,
-      `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`,
-    ];
-    let result = null;
-    for (const url of urls) {
-      try {
-        const r = await fetch(url, { headers: { Accept: 'application/json' } });
-        if (!r.ok) continue;
-        const data = await r.json();
-        result = data?.result || null;
-        if (result) break;
-      } catch(e) {}
-    }
+    const r = await fetch(`/api/kboScores?gameId=${encodeURIComponent(gameId)}&inning=${inn}&action=lineup`);
+    if (!r.ok) return null;
+    const result = await r.json();
     if (!result) return null;
+
     const td = result.textRelayData || result;
     const homeL = td.homeLineup || result.homeLineup;
     const awayL = td.awayLineup || result.awayLineup;
@@ -2493,7 +2482,6 @@ async function fetchLineupDirect(gameId, inning) {
       arr.forEach(p => { if (!om[p.batOrder]) om[p.batOrder] = []; om[p.batOrder].push(p); });
       return Object.entries(om).sort(([a],[b])=>+a-+b).map(([o,ps]) => {
         const cur = ps.find(p=>p.cin==='true') || ps.find(p=>!p.cout) || ps[ps.length-1];
-        // cout=true인 선수(교체된 선발)가 있으면 그 선수의 포지션을 starterPos로 사용
         const replaced = ps.find(p=>p.cout==='true' && p!==cur);
         const starterForPos = replaced || cur;
         return { n:+o, order:+o, name:cur.name, p:cur.posName||'', pos:cur.posName||'', sub:replaced?.name||null, starterName:starterForPos?.name||cur.name, starterPos:starterForPos?.posName||cur.posName||'', hit:cur.hit||0, ab:cur.ab||0, rbi:cur.rbi||0 };
@@ -2503,28 +2491,22 @@ async function fetchLineupDirect(gameId, inning) {
 
     if (!homeL && !awayL) return gs ? { currentGameState: gs } : null;
 
-    // pcode -> name 맵 생성
     const pcodeMap = {};
     [...(homeL?.batter||[]), ...(homeL?.pitcher||[]), ...(awayL?.batter||[]), ...(awayL?.pitcher||[])]
       .forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name; });
-    // 타순 -> 현재 선수 이름 맵
+
     const buildOrderMap = (batters) => {
       const om = {};
       (batters||[]).forEach(p => { if(!om[p.batOrder]) om[p.batOrder]=[]; om[p.batOrder].push(p); });
       const res = {};
-      Object.entries(om).forEach(([o,ps]) => {
-        const cur = ps.find(p=>p.cin==='true') || ps[ps.length-1];
-        res[o] = cur.name;
-      });
+      Object.entries(om).forEach(([o,ps]) => { const cur = ps.find(p=>p.cin==='true') || ps[ps.length-1]; res[o] = cur.name; });
       return res;
     };
     const homeOrderMap = buildOrderMap(homeL?.batter);
     const awayOrderMap = buildOrderMap(awayL?.batter);
 
-    // currentGameState에 이름 변환 추가
     let enrichedGs = gs || null;
     if (gs) {
-      // 이닝 초/말 판별: 초=away 공격, 말=home 공격
       const g = state.modalGame;
       const info = g?.inningInfo || '';
       const isTop = info.includes('초');
@@ -2771,12 +2753,10 @@ async function fetchBrowserGameDetail(gameId, inning) {
   if (!gameId) return null;
   const inn = Math.max(1, inning || 1);
   try {
-    const r = await fetch(`https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`, {
-      headers: { Accept: 'application/json' }
-    });
+    // 서버 프록시 경유 (CORS 방지)
+    const r = await fetch(`/api/kboScores?gameId=${encodeURIComponent(gameId)}&inning=${inn}&action=lineup`);
     if (!r.ok) return null;
-    const data = await r.json();
-    return data?.result || null;
+    return await r.json();
   } catch(e) {
     return null;
   }
