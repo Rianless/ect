@@ -79,6 +79,14 @@
     #relay-body{flex:1;overflow-y:auto;padding:0 0 20px;-webkit-overflow-scrolling:touch}
     #relay-body div{color:#0A0E1A}
     body.dark #relay-body div{color:#fff}
+    /* 티켓팅 바텀시트 */
+    #ticket-panel{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);display:none;align-items:flex-end;justify-content:center;animation:fadeIn 0.2s}
+    #ticket-panel.open{display:flex}
+    #ticket-box{width:100%;max-width:520px;background:#fff;border-radius:22px 22px 0 0;padding:0 0 32px;animation:slideUp 0.3s ease;box-shadow:0 -4px 20px rgba(0,0,0,0.15)}
+    #ticket-box.closing{animation:slideDown 0.28s ease forwards}
+    body.dark #ticket-box{background:#0F1525}
+    .ticket-link-btn{display:flex;align-items:center;gap:10px;width:100%;padding:13px 18px;border-radius:12px;font-size:14px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;text-decoration:none;border:1.5px solid transparent;transition:opacity 0.15s}
+    .ticket-link-btn:active{opacity:0.7}
   </style>
 </head>
 <body>
@@ -90,6 +98,24 @@
 <div id="modal-overlay">
   <div id="modal-box">
     <div id="modal-content"></div>
+  </div>
+</div>
+<!-- 티켓팅 바텀시트 -->
+<div id="ticket-panel" onclick="if(event.target===this)closeTicketPanel()">
+  <div id="ticket-box">
+    <div style="padding:14px 18px 0">
+      <div style="display:flex;justify-content:center;margin-bottom:10px">
+        <div style="width:34px;height:4px;border-radius:2px;background:rgba(0,0,0,0.15)"></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div>
+          <div id="ticket-stad-name" style="font-size:16px;font-weight:900"></div>
+          <div id="ticket-game-info" style="font-size:11px;color:rgba(0,0,0,0.45);margin-top:2px"></div>
+        </div>
+        <button onclick="closeTicketPanel()" style="background:rgba(0,0,0,0.07);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+    </div>
+    <div id="ticket-links" style="padding:12px 18px 0;display:flex;flex-direction:column;gap:8px"></div>
   </div>
 </div>
 <!-- 중계 전체화면 패널 -->
@@ -1024,7 +1050,9 @@ function renderCalSplit(d) {
             ${isKia?`<span class="tag-kia">🐯 KIA</span>`:''}
             ${formatInningBadge(g)?`<span class="tag-lu">${formatInningBadge(g)}</span>`:''}
           </div>
-          <span style="font-size:10px;color:${d.sub}">📍${g.stad} ›</span>
+          ${isKia
+            ? `<button onclick="event.stopPropagation();openTicketPanel('${g.stad}','${g.date}','${g.away}','${g.home}')" style="font-size:10px;color:#E31837;font-weight:700;background:rgba(227,24,55,0.08);border:1px solid rgba(227,24,55,0.25);border-radius:6px;padding:3px 7px;font-family:'Noto Sans KR',sans-serif">📍${g.stad} ›</button>`
+            : `<span style="font-size:10px;color:${d.sub}">📍${g.stad} ›</span>`}
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:7px;flex:1">
@@ -3263,6 +3291,201 @@ window.openRelay = async function(gameId, away, home, inn) {
     };
   }
 };
+
+// ===== 티켓팅 바텀시트 =====
+// 2026 KBO 구장별 티켓팅 정보
+// open: 예매 오픈 일정 설명
+// collect: 실물 티켓 발행(교환) 장소
+// lat/lng: 구장 좌표 (구글맵 맛집 검색용)
+// links: 예매 링크
+const TICKET_INFO = {
+  '광주 기아챔피언스필드': {
+    label: '광주 기아챔피언스필드',
+    lat: 35.1682, lng: 126.8888,
+    open: '경기 약 7~10일 전 · 티켓링크에서 오픈\n오픈 정확한 시각은 KIA 공식 SNS에서 확인',
+    collect: '기아챔피언스필드 1루 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: '티켓링크 예매', url: 'https://www.ticketlink.co.kr/sports/baseball/kia', color: '#E31837', bg: 'rgba(227,24,55,0.08)', border: 'rgba(227,24,55,0.3)', icon: '🎟️' },
+    ]
+  },
+  '잠실': {
+    label: '잠실 야구장',
+    lat: 37.5121, lng: 127.0719,
+    open: '경기 약 7~10일 전 · 홈팀에 따라 예매처 다름\n오픈 정확한 시각은 LG/두산 공식 SNS에서 확인',
+    collect: '잠실야구장 1루·3루 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: '티켓링크 예매 (LG 홈)', url: 'https://www.ticketlink.co.kr/sports/baseball/lg', color: '#C30452', bg: 'rgba(195,4,82,0.07)', border: 'rgba(195,4,82,0.25)', icon: '🎟️' },
+      { name: '놀티켓 예매 (두산 홈)', url: 'https://tickets.interpark.com', color: '#1B2A6B', bg: 'rgba(27,42,107,0.07)', border: 'rgba(27,42,107,0.25)', icon: '🎟️' },
+    ]
+  },
+  '인천 SSG랜더스필드': {
+    label: '인천 SSG랜더스필드',
+    lat: 37.4370, lng: 126.6934,
+    open: '경기 약 7~10일 전 · SSG닷컴 단독 예매\n오픈 정확한 시각은 SSG 랜더스 공식 SNS에서 확인',
+    collect: 'SSG랜더스필드 1게이트·3게이트 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: 'SSG닷컴 예매', url: 'https://ticket.ssg.com', color: '#CE0E2D', bg: 'rgba(206,14,45,0.07)', border: 'rgba(206,14,45,0.25)', icon: '🎟️' },
+    ]
+  },
+  '대전 한화생명이글스파크': {
+    label: '대전 한화생명이글스파크',
+    lat: 36.3171, lng: 127.4290,
+    open: '경기 약 7~10일 전 · 티켓링크 & 한화이글스 홈페이지\n오픈 정확한 시각은 한화 이글스 공식 SNS에서 확인',
+    collect: '한화생명이글스파크 1루·3루 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: '티켓링크 예매', url: 'https://www.ticketlink.co.kr/sports/baseball/hanhwa', color: '#FF6600', bg: 'rgba(255,102,0,0.07)', border: 'rgba(255,102,0,0.25)', icon: '🎟️' },
+      { name: '한화이글스 공식', url: 'https://www.eagles.co.kr', color: '#FF6600', bg: 'rgba(255,102,0,0.05)', border: 'rgba(255,102,0,0.18)', icon: '🦅' },
+    ]
+  },
+  '대구 삼성라이온즈파크': {
+    label: '대구 삼성라이온즈파크',
+    lat: 35.8411, lng: 128.6814,
+    open: '경기 약 7~10일 전 · 티켓링크에서 오픈\n오픈 정확한 시각은 삼성 라이온즈 공식 SNS에서 확인',
+    collect: '삼성라이온즈파크 1루·3루 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: '티켓링크 예매', url: 'https://www.ticketlink.co.kr/sports/baseball/samsung', color: '#1E4489', bg: 'rgba(30,68,137,0.07)', border: 'rgba(30,68,137,0.25)', icon: '🎟️' },
+    ]
+  },
+  '수원 KT위즈파크': {
+    label: '수원 KT위즈파크',
+    lat: 37.2997, lng: 127.0100,
+    open: '경기 약 7~10일 전 · 티켓링크에서 오픈\n오픈 정확한 시각은 KT 위즈 공식 SNS에서 확인',
+    collect: 'KT위즈파크 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: '티켓링크 예매', url: 'https://www.ticketlink.co.kr/sports/baseball/kt', color: '#333', bg: 'rgba(60,60,60,0.07)', border: 'rgba(60,60,60,0.22)', icon: '🎟️' },
+    ]
+  },
+  '사직': {
+    label: '사직 야구장',
+    lat: 35.1940, lng: 129.0612,
+    open: '경기 약 7~10일 전 · 롯데 자이언츠 공식 앱/홈페이지\n오픈 정확한 시각은 롯데 자이언츠 공식 SNS에서 확인',
+    collect: '사직야구장 1루·3루 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: '롯데 자이언츠 공식 예매', url: 'https://www.giantsclub.com', color: '#002561', bg: 'rgba(0,37,97,0.07)', border: 'rgba(0,37,97,0.25)', icon: '🎟️' },
+    ]
+  },
+  '고척 스카이돔': {
+    label: '고척 스카이돔',
+    lat: 37.4982, lng: 126.8669,
+    open: '경기 약 7~10일 전 · 놀티켓(구 인터파크)에서 오픈\n오픈 정확한 시각은 키움 히어로즈 공식 SNS에서 확인',
+    collect: '고척 스카이돔 1층 매표소 (경기 시작 2시간 전~)\n※ 주차 불가 → 대중교통 이용 권장',
+    links: [
+      { name: '놀티켓 예매', url: 'https://tickets.interpark.com', color: '#570514', bg: 'rgba(87,5,20,0.07)', border: 'rgba(87,5,20,0.25)', icon: '🎟️' },
+    ]
+  },
+  '창원 NC파크': {
+    label: '창원 NC파크',
+    lat: 35.2226, lng: 128.5820,
+    open: '경기 약 7~10일 전 · NC 다이노스 공식 앱/홈페이지\n오픈 정확한 시각은 NC 다이노스 공식 SNS에서 확인',
+    collect: 'NC파크 1루·3루 매표소 (경기 시작 2시간 전~)',
+    links: [
+      { name: 'NC 다이노스 공식 예매', url: 'https://ticket.ncdinos.com', color: '#071D3B', bg: 'rgba(7,29,59,0.07)', border: 'rgba(7,29,59,0.25)', icon: '🎟️' },
+    ]
+  },
+};
+
+window.openTicketPanel = function(stad, date, away, home) {
+  const info = TICKET_INFO[stad] || {
+    label: stad,
+    lat: 37.5665, lng: 126.9780,
+    open: '각 구단 공식 SNS에서 오픈 시각 확인',
+    collect: '구장 매표소 (경기 시작 2시간 전~)',
+    links: [{ name: '티켓링크', url: 'https://www.ticketlink.co.kr/sports', color: '#E31837', bg: 'rgba(227,24,55,0.08)', border: 'rgba(227,24,55,0.3)', icon: '🎟️' }]
+  };
+  const dark = document.body.classList.contains('dark');
+  const panel = document.getElementById('ticket-panel');
+  const box = document.getElementById('ticket-box');
+  const stadEl = document.getElementById('ticket-stad-name');
+  const infoEl = document.getElementById('ticket-game-info');
+  const linksEl = document.getElementById('ticket-links');
+
+  // 날짜 포맷
+  const [y,m,d2] = date.split('-');
+  const dateStr = `${parseInt(m)}월 ${parseInt(d2)}일`;
+
+  stadEl.textContent = '📍 ' + info.label;
+  stadEl.style.color = dark ? '#fff' : '#0A0E1A';
+  infoEl.textContent = `${dateStr} · ${away} vs ${home}`;
+  infoEl.style.color = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+
+  const subColor = dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.4)';
+  const divColor = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const badgeBg  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  const textCol  = dark ? 'rgba(255,255,255,0.85)' : '#0A0E1A';
+
+  // 예매 오픈 + 실물 발행처 정보 섹션
+  const openLines = info.open.split('\n').map((l,i) =>
+    i === 0
+      ? `<div style="font-size:12px;color:${textCol};line-height:1.5">${l}</div>`
+      : `<div style="font-size:11px;color:${subColor};line-height:1.5">${l}</div>`
+  ).join('');
+
+  const collectLines = info.collect.split('\n').map(l =>
+    `<div style="font-size:12px;color:${textCol};line-height:1.5">${l}</div>`
+  ).join('');
+
+  // 구글맵 맛집 검색 URL
+  const gmapFood = `https://www.google.com/maps/search/${encodeURIComponent(info.label+' 맛집 식당')}/@${info.lat},${info.lng},16z`;
+  const gmapCafe = `https://www.google.com/maps/search/${encodeURIComponent(info.label+' 카페')}/@${info.lat},${info.lng},16z`;
+
+  const metaHtml = `
+    <div style="padding:10px 18px 12px;border-bottom:1px solid ${divColor}">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <span style="font-size:11px;font-weight:700;color:${subColor};white-space:nowrap;margin-top:2px">⏰ 예매 오픈</span>
+          <div>${openLines}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <span style="font-size:11px;font-weight:700;color:${subColor};white-space:nowrap;margin-top:2px">🎫 실물 발행처</span>
+          <div>${collectLines}</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:10px 18px 4px;border-bottom:1px solid ${divColor}">
+      <div style="font-size:11px;font-weight:700;color:${subColor};margin-bottom:7px">🍽️ 구장 주변</div>
+      <div style="display:flex;gap:8px">
+        <a href="${gmapFood}" target="_blank" rel="noopener"
+          style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 0;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;font-family:'Noto Sans KR',sans-serif;background:${dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.05)'};color:${dark?'#fff':'#0A0E1A'}">
+          🍚 <span>식당</span>
+        </a>
+        <a href="${gmapCafe}" target="_blank" rel="noopener"
+          style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 0;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;font-family:'Noto Sans KR',sans-serif;background:${dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.05)'};color:${dark?'#fff':'#0A0E1A'}">
+          ☕ <span>카페</span>
+        </a>
+      </div>
+    </div>`;
+
+  linksEl.innerHTML = metaHtml + info.links.map(l =>
+    `<a href="${l.url}" target="_blank" rel="noopener" class="ticket-link-btn"
+      style="background:${dark?'rgba(255,255,255,0.06)':l.bg};color:${dark?'#fff':l.color};border-color:${dark?'rgba(255,255,255,0.1)':l.border}">
+      <span style="font-size:18px">${l.icon}</span>
+      <span>${l.name}</span>
+      <span style="margin-left:auto;font-size:13px;opacity:0.45">→</span>
+    </a>`
+  ).join('');
+
+  if(box) box.style.background = dark ? '#0F1525' : '#fff';
+  panel.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  history.pushState({ticketPanel:true}, '');
+};
+
+window.closeTicketPanel = function() {
+  const panel = document.getElementById('ticket-panel');
+  const box = document.getElementById('ticket-box');
+  if(box) box.classList.add('closing');
+  setTimeout(() => {
+    panel.classList.remove('open');
+    if(box) box.classList.remove('closing');
+    document.body.style.overflow = '';
+  }, 280);
+};
+
+window.addEventListener('popstate', function(e) {
+  if(document.getElementById('ticket-panel')?.classList.contains('open')) {
+    closeTicketPanel();
+  }
+});
 
 window.closeRelay = function() {
   const box = document.getElementById('relay-box');
