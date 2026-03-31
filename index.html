@@ -1476,10 +1476,16 @@ function saveTodos(list) {
 
 let _todoSortAsc = false; // false = 최신순(기본), true = 오래된순
 
-window.toggleTodoSort = function() {
-  _todoSortAsc = !_todoSortAsc;
-  _refreshTodoList();
-};
+// 정렬 버튼은 렌더 후 이 함수로 이벤트 연결 (innerHTML 이벤트 문제 우회)
+function _attachSortBtn() {
+  const btn = document.getElementById('todo-sort-btn');
+  if (!btn) return;
+  btn.onclick = function() {
+    _todoSortAsc = !_todoSortAsc;
+    btn.textContent = _todoSortAsc ? '↑ 오래된순' : '↓ 최신순';
+    _refreshTodoList();
+  };
+}
 
 function renderTodoMemo(d) {
   const todos = getTodos();
@@ -1490,8 +1496,8 @@ function renderTodoMemo(d) {
 
   let html = '';
 
-  // 입력창 + 정렬 버튼
-  html += `<div style="display:flex;gap:8px;margin-bottom:14px">
+  // 입력창
+  html += `<div style="display:flex;gap:8px;margin-bottom:10px">
     <input id="todo-input" type="text" placeholder="새 메모 입력..." maxlength="100"
       autocomplete="off"
       onkeydown="if(event.key==='Enter'){event.preventDefault();addTodo();}"
@@ -1502,8 +1508,10 @@ function renderTodoMemo(d) {
       -webkit-user-select:text;user-select:text"/>
     <button onclick="addTodo()" style="padding:10px 14px;background:#E31837;color:#fff;border:none;
       border-radius:10px;font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;white-space:nowrap">추가</button>
-  </div>
-  <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+  </div>`;
+
+  // 정렬 버튼 — todo-list-container 완전 바깥. innerHTML 교체와 무관하게 유지됨
+  html += `<div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px">
     <button id="todo-sort-btn" onclick="toggleTodoSort()"
       style="font-size:11px;font-weight:700;color:${d.sub};background:${d.bg};border:1px solid ${d.bgB};
       border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'Noto Sans KR',sans-serif">
@@ -1511,11 +1519,11 @@ function renderTodoMemo(d) {
     </button>
   </div>`;
 
-  // 리스트 컨테이너 (DOM 직접 업데이트를 위해 id 부여)
+  // 리스트 컨테이너 — _refreshTodoList가 여기만 갱신
   html += `<div id="todo-list-container">`;
 
   if (!todos.length) {
-    html += `<div style="text-align:center;padding:30px 0;color:${d.sub};font-size:13px">메모가 없어요. 위에 입력해보세요!</div>`;
+    html += `<div style="text-align:center;padding:20px 0;color:${d.sub};font-size:13px">메모가 없어요. 위에 입력해보세요!</div>`;
     html += `</div>`;
     return html;
   }
@@ -1527,8 +1535,9 @@ function renderTodoMemo(d) {
     groups[t.date].push(t);
   });
 
-  // 정렬 방향 적용
-  Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a)).forEach(date => {
+  const sortedDates = Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a));
+
+  sortedDates.forEach((date) => {
     const [y,m,da] = date.split('-');
     const dayObj = new Date(date+'T12:00:00');
     const dayLabel = dw[dayObj.getDay()];
@@ -1598,11 +1607,13 @@ window._refreshTodoList = function() {
   const dw = ['일','월','화','수','목','금','토'];
 
   if (!todos.length) {
-    listEl.innerHTML = `<div style="text-align:center;padding:30px 0;color:${d.sub};font-size:13px">메모가 없어요. 위에 입력해보세요!</div>`;
+    listEl.innerHTML = `<div style="text-align:center;padding:20px 0;color:${d.sub};font-size:13px">메모가 없어요. 위에 입력해보세요!</div>`;
+    const sb = document.getElementById('todo-sort-btn');
+    if (sb) sb.textContent = _todoSortAsc ? '↑ 오래된순' : '↓ 최신순';
     return;
   }
 
-  // 정렬 버튼 텍스트 업데이트
+  // 정렬 버튼 텍스트만 갱신 (버튼 DOM은 건드리지 않음)
   const sortBtn = document.getElementById('todo-sort-btn');
   if (sortBtn) sortBtn.textContent = _todoSortAsc ? '↑ 오래된순' : '↓ 최신순';
 
@@ -1612,8 +1623,10 @@ window._refreshTodoList = function() {
     groups[t.date].push(t);
   });
 
+  const sortedDates2 = Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a));
+
   let html = '';
-  Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a)).forEach(date => {
+  sortedDates2.forEach((date) => {
     const [y,m,da] = date.split('-');
     const dayObj = new Date(date+'T12:00:00');
     const dayLabel = dw[dayObj.getDay()];
@@ -3464,13 +3477,13 @@ window.openTicketPanel = function(stad, date, away, home) {
 
   const metaHtml = `
     <div style="padding:10px 18px 12px;border-bottom:1px solid ${divColor}">
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;gap:8px;align-items:flex-start">
-          <span style="font-size:11px;font-weight:700;color:${subColor};white-space:nowrap;margin-top:2px">⏰ 예매 오픈</span>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:${subColor};margin-bottom:3px">⏰ 예매 오픈</div>
           <div>${openLines}</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:flex-start">
-          <span style="font-size:11px;font-weight:700;color:${subColor};white-space:nowrap;margin-top:2px">🎫 실물 발행처</span>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:${subColor};margin-bottom:3px">🎫 실물 발행처</div>
           <div>${collectLines}</div>
         </div>
       </div>
