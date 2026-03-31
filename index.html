@@ -1282,27 +1282,31 @@ function renderBaseballRecord(d) {
     });
     html += '</div>';
 
-    // 사진 슬라이드 (show/hide 방식 - 너비 계산 불필요)
+    // 사진 슬라이더 (버튼 전환 방식)
     const recPhotos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
     if(recPhotos.length > 0) {
       const slideId = 'slide-'+memoId;
       const pj = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
       html += '<div class="rec-photo-wrap" style="margin-bottom:10px">';
-      html += '<div id="'+slideId+'" data-cur="0" data-total="'+recPhotos.length+'" data-photos="'+pj+'" style="position:relative;border-radius:10px;overflow:hidden;touch-action:pan-y">';
+      html += '<div id="'+slideId+'" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111">';
       recPhotos.forEach(function(src, pi) {
-        html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+'">';
+        html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+';position:relative">';
         html += '<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(\''+slideId+'\')" '
-          + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;background:#111;border-radius:10px"/>';
+          + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>';
+        // ✕ 삭제 버튼
         html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\','+pi+')" '
           + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
           + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>';
+        // 카운터 + 좌우 버튼 (사진이 2장 이상일 때만)
+        if(recPhotos.length > 1) {
+          html += '<div style="position:absolute;bottom:10px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:12px;pointer-events:none">';
+          html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',-1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">‹</button>';
+          html += '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">'+(pi+1)+'/'+recPhotos.length+'</span>';
+          html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">›</button>';
+          html += '</div>';
+        }
         html += '</div>';
       });
-      if(recPhotos.length > 1) {
-        html += '<div class="sl-counter" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px;pointer-events:none">1/'+recPhotos.length+'</div>';
-        html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',-1)" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>';
-        html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>';
-      }
       html += '</div>';
       html += '</div>';
     }
@@ -1419,24 +1423,25 @@ function _recRenderPhotos(container, photos, date, away, home) {
   const memoId = 'rec-memo-'+date+'-'+away+'-'+home;
   const slideId = 'slide-'+memoId;
   const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-  let html = '<div id="'+slideId+'" data-cur="0" data-total="'+photos.length+'" data-photos="'+pj+'" style="position:relative;border-radius:10px;overflow:hidden;touch-action:pan-y">';
+  let html = '<div id="'+slideId+'" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111">';
   photos.forEach(function(src, pi) {
-    html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+'">'
+    html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+';position:relative">'
       + '<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(\''+slideId+'\')" '
-      + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;background:#111;border-radius:10px"/>'
+      + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
       + '<button onclick="event.stopPropagation();recDeletePhoto(\''+date+'\',\''+away+'\',\''+home+'\','+pi+')" '
       + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
-      + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>'
-      + '</div>';
+      + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>';
+    if(photos.length > 1) {
+      html += '<div style="position:absolute;bottom:10px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:12px;pointer-events:none">'
+        + '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',-1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">‹</button>'
+        + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">'+(pi+1)+'/'+photos.length+'</span>'
+        + '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">›</button>'
+        + '</div>';
+    }
+    html += '</div>';
   });
-  if(photos.length > 1) {
-    html += '<div class="sl-counter" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px;pointer-events:none">1/'+photos.length+'</div>';
-    html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',-1)" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>';
-    html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>';
-  }
   html += '</div>';
   container.innerHTML = html;
-  _initSlideTouch(document.getElementById(slideId));
 }
 
 function renderMemos(d) {
@@ -3642,13 +3647,12 @@ window.recSlide = function(slideId, dir) {
   if (!wrap) return;
   const items = wrap.querySelectorAll('.sl-item');
   const total = items.length;
+  if (!total) return;
   let cur = parseInt(wrap.dataset.cur) || 0;
   items[cur].style.display = 'none';
   cur = (cur + dir + total) % total;
   items[cur].style.display = 'block';
   wrap.dataset.cur = cur;
-  const counter = wrap.querySelector('.sl-counter');
-  if (counter) counter.textContent = (cur + 1) + '/' + total;
 };
 
 window.recOpenPhoto = function(slideId) {
