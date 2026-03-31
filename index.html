@@ -2162,8 +2162,10 @@ function renderModal(d) {
 
             // currentGameState에서 타자/투수 이름 추출
             const cgs = g.currentGameState;
-            const batterNameCgs = cgs?.batterName || cgs?.batter?.name || '';
-            const pitcherNameCgs = cgs?.pitcherName || cgs?.pitcher?.name || (defIsHome ? (g.homePitcher||g.homeStarter||'') : (g.awayPitcher||g.awayStarter||'')) || '';
+            // 숫자(ID)인 경우 이름으로 사용하지 않도록 필터링
+            const _isNumId = v => v && /^\d+$/.test(String(v));
+            const batterNameCgs = (!_isNumId(cgs?.batterName) && cgs?.batterName) || cgs?.batter?.name || '';
+            const pitcherNameCgs = (!_isNumId(cgs?.pitcherName) && cgs?.pitcherName) || (!_isNumId(cgs?.pitcher) && cgs?.pitcher) || cgs?.pitcher?.name || (defIsHome ? (g.homePitcher||g.homeStarter||'') : (g.awayPitcher||g.awayStarter||'')) || '';
             const base1Runner = cgs?.base1Name || cgs?.base1Runner?.name || (base1?'주자':'');
             const base2Runner = cgs?.base2Name || cgs?.base2Runner?.name || (base2?'주자':'');
             const base3Runner = cgs?.base3Name || cgs?.base3Runner?.name || (base3?'주자':'');
@@ -2634,11 +2636,13 @@ async function fetchLineupDirect(gameId, inning) {
       const info = g?.inningInfo || '';
       const isTop = info.includes('초') || !info.includes('말');
       const atkOM = isTop ? awayOM : homeOM;
+      const _numId = v => v && /^\d+$/.test(String(v));
       enrichedGs = {
         ...gs,
         _inningInfo: info,
-        pitcherName: pcodeMap[gs.pitcher] || gs.pitcherName || null,
-        batterName:  pcodeMap[gs.batter]  || gs.batterName  || null,
+        // pcodeMap으로 ID를 이름으로 변환, 숫자 ID가 이름 필드에 남아있으면 비움
+        pitcherName: pcodeMap[gs.pitcher] || (!_numId(gs.pitcherName) ? gs.pitcherName : null) || null,
+        batterName:  pcodeMap[gs.batter]  || (!_numId(gs.batterName)  ? gs.batterName  : null) || null,
         base1Name: atkOM[gs.base1] || null,
         base2Name: atkOM[gs.base2] || null,
         base3Name: atkOM[gs.base3] || null,
@@ -3085,7 +3089,29 @@ async function fetchTodayScores(targetDate='') {
       if (g.awayBallFour != null) upd.awayBallFour = g.awayBallFour;
       if (g.homeBallFour != null) upd.homeBallFour = g.homeBallFour;
       if (g.lineup) upd.lineup = g.lineup;
-      if (g.currentGameState) upd.currentGameState = g.currentGameState;
+      if (g.currentGameState) {
+        // 기존 currentGameState에 이름이 이미 있으면 보존 (숫자 ID로 덮어쓰기 방지)
+        const prevGs = SCH[idx].currentGameState;
+        const newGs = g.currentGameState;
+        const mergedGs = { ...newGs };
+        // pitcherName: 새 값이 숫자(ID)이거나 없으면 기존 이름 유지
+        const newPitcher = newGs.pitcherName || newGs.currentPitcherName || '';
+        const prevPitcher = prevGs?.pitcherName || prevGs?.currentPitcherName || '';
+        if ((!newPitcher || /^\d+$/.test(String(newPitcher))) && prevPitcher && !/^\d+$/.test(String(prevPitcher))) {
+          mergedGs.pitcherName = prevPitcher;
+        }
+        // batterName: 새 값이 숫자(ID)이거나 없으면 기존 이름 유지
+        const newBatter = newGs.batterName || newGs.currentBatterName || '';
+        const prevBatter = prevGs?.batterName || prevGs?.currentBatterName || '';
+        if ((!newBatter || /^\d+$/.test(String(newBatter))) && prevBatter && !/^\d+$/.test(String(prevBatter))) {
+          mergedGs.batterName = prevBatter;
+        }
+        // 베이스 주자 이름 보존
+        if (!mergedGs.base1Name && prevGs?.base1Name) mergedGs.base1Name = prevGs.base1Name;
+        if (!mergedGs.base2Name && prevGs?.base2Name) mergedGs.base2Name = prevGs.base2Name;
+        if (!mergedGs.base3Name && prevGs?.base3Name) mergedGs.base3Name = prevGs.base3Name;
+        upd.currentGameState = mergedGs;
+      }
       if (g.gameId) upd.gameId = g.gameId;
       if (g.broadChannel) upd.broadChannel = g.broadChannel;
       Object.assign(SCH[idx], upd);
@@ -3330,20 +3356,22 @@ function updateRelayUI() {
     }
   }
   // gs 있으면 pitcherName/batterName 보강 (textRelays 첫 항목에서)
+  const _isNumericId = v => v && /^\d+$/.test(String(v));
   if (gs && game.textRelays?.length) {
     for (const relay of game.textRelays) {
       const opts = relay.textOptions || [];
       for (let oi = opts.length - 1; oi >= 0; oi--) {
         const cgs = opts[oi]?.currentGameState;
         if (cgs) {
-          if (!gs.pitcherName && cgs.pitcherName) gs.pitcherName = cgs.pitcherName;
-          if (!gs.batterName  && cgs.batterName)  gs.batterName  = cgs.batterName;
-          if (!gs.currentPitcherName && cgs.currentPitcherName) gs.currentPitcherName = cgs.currentPitcherName;
-          if (!gs.currentBatterName  && cgs.currentBatterName)  gs.currentBatterName  = cgs.currentBatterName;
+          // 숫자 ID가 아닌 경우에만 보강
+          if ((!gs.pitcherName || _isNumericId(gs.pitcherName)) && cgs.pitcherName && !_isNumericId(cgs.pitcherName)) gs.pitcherName = cgs.pitcherName;
+          if ((!gs.batterName  || _isNumericId(gs.batterName))  && cgs.batterName  && !_isNumericId(cgs.batterName))  gs.batterName  = cgs.batterName;
+          if (!gs.currentPitcherName && cgs.currentPitcherName && !_isNumericId(cgs.currentPitcherName)) gs.currentPitcherName = cgs.currentPitcherName;
+          if (!gs.currentBatterName  && cgs.currentBatterName  && !_isNumericId(cgs.currentBatterName))  gs.currentBatterName  = cgs.currentBatterName;
           break;
         }
       }
-      if (gs.pitcherName || gs.batterName) break;
+      if ((gs.pitcherName && !_isNumericId(gs.pitcherName)) || (gs.batterName && !_isNumericId(gs.batterName))) break;
     }
   }
 
@@ -3365,7 +3393,9 @@ function updateRelayUI() {
     // 투수: 수비팀 현재 투수
     if (!gs._pitcherName) {
       // currentGameState에서 직접 (pitcher, pitcherName, currentPitcher 등)
-      const rawP = gs.pitcherName || gs.currentPitcherName || gs.pitcher || '';
+      // 숫자(ID)인 경우 이름으로 사용하지 않음
+      const isNumeric = v => /^\d+$/.test(String(v||''));
+      const rawP = [gs.pitcherName, gs.currentPitcherName, gs.pitcher].find(v => v && !isNumeric(v)) || '';
       // SCH에서 현재 투수 (말이면 away 투수, 초이면 home 투수)
       const schP = isBottomHalf
         ? (schGame2?.awayPitcher || schGame2?.awayStarter || '')
@@ -3375,7 +3405,8 @@ function updateRelayUI() {
 
     // 타자: 공격팀 현재 타자
     if (!gs._batterName) {
-      const rawB = gs.batterName || gs.currentBatterName || gs.batter || '';
+      const isNumeric2 = v => /^\d+$/.test(String(v||''));
+      const rawB = [gs.batterName, gs.currentBatterName, gs.batter].find(v => v && !isNumeric2(v)) || '';
       gs._batterName = rawB;
     }
   }
