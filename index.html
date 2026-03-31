@@ -2455,25 +2455,7 @@ function renderModal(d) {
             <input type="file" accept="image/*" id="memo-photo-input" style="display:none" multiple onchange="saveMemoPhoto(this)"/>
             <button onclick="document.getElementById('memo-photo-input').click()" style="font-size:11px;color:#E31837;font-weight:700;font-family:'Noto Sans KR',sans-serif;background:none;border:none;cursor:pointer;padding:4px 8px;border:1px solid #E31837;border-radius:6px">선택</button>
           </div>
-          <div id="memo-photo-preview" style="margin-top:8px">${(()=>{
-            const photos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
-            if(!photos.length) return '';
-            const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-            let h = '<div id="memo-slide" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
-            photos.forEach((src,i) => {
-              h += '<div class="sl-item" style="display:'+(i===0?'block':'none')+';position:relative">'
-                + '<img src="'+src+'" onclick="openPhotoViewer(JSON.parse(document.getElementById(\'memo-slide\').dataset.photos),parseInt(document.getElementById(\'memo-slide\').dataset.cur)||0)" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
-                + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
-                + '</div>';
-            });
-            if(photos.length > 1) {
-              h += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
-                + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+photos.length+'</span>'
-                + '</div>';
-            }
-            h += '</div>';
-            return h;
-          })()}</div>
+          <div id="memo-photo-preview" style="margin-top:8px"></div>
         </div>
         <button onclick="closeModal()" style="width:100%;margin-top:14px;padding:14px;background:#E31837;color:#fff;border-radius:12px;font-size:15px;font-weight:800;font-family:'Noto Sans KR',sans-serif;border:none;cursor:pointer">✓ 완료</button>
       </div>
@@ -2517,6 +2499,8 @@ function renderModal(d) {
     } catch(e) {}
   }
   syncMemoFromCloud();
+  // 초기 사진 프리뷰 렌더
+  _refreshMemoPhotoPreview(memoData.photos || (memoData.photo ? [memoData.photo] : []));
   window.saveMemoField = function(field, val) {
     const data = getMemoData();
     if(val===null) delete data[field]; else data[field]=val;
@@ -2569,22 +2553,29 @@ function renderModal(d) {
     if(!preview) return;
     if(!photos || !photos.length) { preview.innerHTML = ''; return; }
     const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-    const existingSlide = document.getElementById('memo-slide');
-    const curIdx = existingSlide ? (parseInt(existingSlide.dataset.cur) || 0) : 0;
-    let h = '<div id="memo-slide" data-cur="'+curIdx+'" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
+    let h = '<div id="memo-slide" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
     photos.forEach(function(src, i) {
-      h += '<div class="sl-item" style="display:'+(i===curIdx?'block':'none')+';position:relative">'
-        + '<img src="'+src+'" onclick="openPhotoViewer(JSON.parse(document.getElementById(\'memo-slide\').dataset.photos),parseInt(document.getElementById(\'memo-slide\').dataset.cur)||0)" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
+      h += '<div class="sl-item" style="display:'+(i===0?'block':'none')+';position:relative">'
+        + '<img src="'+src+'" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
         + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
         + '</div>';
     });
     if(photos.length > 1) {
       h += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
-        + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">'+(curIdx+1)+'/'+photos.length+'</span>'
+        + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+photos.length+'</span>'
         + '</div>';
     }
     h += '</div>';
     preview.innerHTML = h;
+    // 사진 클릭 → 전체화면 뷰어
+    const slide = document.getElementById('memo-slide');
+    if(slide) {
+      slide.querySelectorAll('img').forEach(function(img, i) {
+        img.addEventListener('click', function() {
+          openPhotoViewer(photos, i);
+        });
+      });
+    }
   }
 
   document.getElementById('memo-input').addEventListener('input', e => {
