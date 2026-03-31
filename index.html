@@ -3640,8 +3640,7 @@ document.addEventListener('keydown', function(e) {
 // ── 기록 탭 사진 슬라이드 터치 핸들러 ──
 function _initRecSlides() {
   document.querySelectorAll('[id^="slide-"]').forEach(function(wrap) {
-    if (wrap.dataset.slideInit) return; // 중복 방지
-    wrap.dataset.slideInit = '1';
+    if (wrap.dataset.slideInit) return;
 
     const track = wrap.querySelector('.slide-track');
     const items = wrap.querySelectorAll('.slide-item');
@@ -3649,38 +3648,49 @@ function _initRecSlides() {
     const total = items.length;
     if (!track || total < 2) return;
 
-    let cur = 0;
-    const photos = Array.from(items).map(function(el) {
-      return el.querySelector('img').src;
-    });
-    wrap.dataset.photos = JSON.stringify(photos);
+    // 초기화는 실제 너비가 잡힌 후에만
+    function tryInit() {
+      const w = wrap.getBoundingClientRect().width;
+      if (!w) { requestAnimationFrame(tryInit); return; }
 
-    function goTo(idx) {
-      cur = Math.max(0, Math.min(total - 1, idx));
-      const w = wrap.offsetWidth;
-      track.style.transform = 'translateX(-' + (cur * w) + 'px)';
-      if (counter) counter.textContent = (cur + 1) + '/' + total;
+      wrap.dataset.slideInit = '1';
+      let cur = 0;
+
+      const photos = Array.from(items).map(function(el) {
+        return el.querySelector('img').src;
+      });
+      wrap.dataset.photos = JSON.stringify(photos);
+
+      // 각 item 너비를 wrap 너비로 명시 고정
+      items.forEach(function(el) { el.style.width = w + 'px'; });
+
+      function goTo(idx) {
+        cur = Math.max(0, Math.min(total - 1, idx));
+        const iw = wrap.getBoundingClientRect().width || w;
+        track.style.transform = 'translateX(-' + (cur * iw) + 'px)';
+        if (counter) counter.textContent = (cur + 1) + '/' + total;
+      }
+
+      let tx = null;
+      wrap.addEventListener('touchstart', function(e) {
+        tx = e.touches[0].clientX;
+      }, { passive: true });
+      wrap.addEventListener('touchend', function(e) {
+        if (tx === null) return;
+        const dx = e.changedTouches[0].clientX - tx;
+        if (Math.abs(dx) > 40) goTo(dx < 0 ? cur + 1 : cur - 1);
+        tx = null;
+      }, { passive: true });
+
+      goTo(0);
     }
 
-    // 터치 스와이프
-    let tx = null;
-    wrap.addEventListener('touchstart', function(e) {
-      tx = e.touches[0].clientX;
-    }, { passive: true });
-    wrap.addEventListener('touchend', function(e) {
-      if (tx === null) return;
-      const dx = e.changedTouches[0].clientX - tx;
-      if (Math.abs(dx) > 40) goTo(dx < 0 ? cur + 1 : cur - 1);
-      tx = null;
-    }, { passive: true });
-
-    // 초기 위치
-    goTo(0);
+    requestAnimationFrame(function() { requestAnimationFrame(tryInit); });
   });
 }
 
 document.addEventListener('renderDone', function() {
-  setTimeout(_initRecSlides, 0);
+  requestAnimationFrame(function() { requestAnimationFrame(_initRecSlides); });
 });
 
 render();
