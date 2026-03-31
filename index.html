@@ -2116,8 +2116,8 @@ function renderModal(d) {
           ${(isLive||isFinal)?`<button onclick="openRelay('${g.gameId}','${g.away}','${g.home}',${g.inning||1})" style="display:flex;align-items:center;gap:5px;padding:6px 12px;background:#E31837;border:none;border-radius:20px;color:#fff;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer">📋 중계 전체보기</button>`:''}
         </div>
         ${!hasLU?`<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:26px 20px;text-align:center">
-          <div style="font-size:24px;margin-bottom:6px">⏳</div>
-          <div style="font-size:13px;color:${d.sub}">라인업 불러오는 중...</div>
+          <div style="font-size:24px;margin-bottom:6px">${(isLive||isFinal)?'⏳':'📋'}</div>
+          <div style="font-size:13px;color:${d.sub}">${(isLive||isFinal)?'라인업 불러오는 중...':'라인업은 경기 당일 발표됩니다'}</div>
         </div>`:
         `<div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;overflow:hidden">
           ${(()=>{
@@ -2541,111 +2541,102 @@ function nextMo(){if(state.mo===12){state.yr++;state.mo=1;}else state.mo++;rende
 function selDate(ds){state.sel=ds;render();fetchTodayScores(ds);}
 
 // 라인업+경기상황: 서버 프록시를 통해 호출 (CORS 방지)
+// 타자 배열 파싱 (배열 또는 객체)
+function _parseBatters(src) {
+  const arr = Array.isArray(src) ? src : (src?.batter || []);
+  if (!arr.length) return [];
+  const om = {};
+  arr.forEach(p => {
+    const key = p.batOrder || p.order || p.n;
+    if (!om[key]) om[key] = [];
+    om[key].push(p);
+  });
+  return Object.entries(om).sort(([a],[b])=>+a-+b).map(([o,ps]) => {
+    const cur = ps.find(p=>p.cin==='true'||p.cin===true)
+      || ps.find(p=>!(p.cout==='true'||p.cout===true))
+      || ps[ps.length-1];
+    const replaced = ps.find(p=>(p.cout==='true'||p.cout===true) && p!==cur);
+    const starter = replaced || cur;
+    return {
+      n:+o, order:+o,
+      name: cur.name || cur.playerName || '',
+      p: cur.posName || cur.position || '',
+      pos: cur.posName || cur.position || '',
+      sub: replaced ? replaced.name : null,
+      starterName: starter.name || cur.name || '',
+      starterPos: starter.posName || starter.position || cur.posName || '',
+      hit: cur.hit||0, ab: cur.ab||0, rbi: cur.rbi||0,
+    };
+  });
+}
+function _parsePitchers(src) {
+  const arr = Array.isArray(src) ? src : (src?.pitcher || []);
+  return arr.map(p=>({ seqno:p.seqno, name:p.name||'', inn:p.inn||'0', er:p.er||0, kk:p.kk||0 }));
+}
+
 async function fetchLineupDirect(gameId, inning) {
   if (!gameId) return null;
   const inn = Math.max(1, inning || 1);
   try {
-    // 1순위: action=lineup (서버 경유 - 네이버 lineup API)
     const r = await fetch(`/api/kboScores?gameId=${encodeURIComponent(gameId)}&inning=${inn}&action=lineup`);
     if (!r.ok) return null;
     const result = await r.json();
     if (!result) return null;
 
-    // 서버가 정규화한 lineup 필드 우선 사용
-    const serverLineup = result.lineup;
-    // 다양한 키 구조 탐색
-    const td = result.textRelayData || result;
-    const homeL = serverLineup?.homeLineup
-      || td.homeLineup || result.homeLineup
-      || (result.home?.batter ? result.home : null)
-      || null;
-    const awayL = serverLineup?.awayLineup
-      || td.awayLineup || result.awayLineup
-      || (result.away?.batter ? result.away : null)
-      || null;
-    const gs = td.currentGameState || result.currentGameState;
+    // 서버가 표준화한 homeLineup/awayLineup 사용
+    const homeL = result.homeLineup;
+    const awayL = result.awayLineup;
+    const gs    = result.currentGameState;
 
-    const parseBatters = (arr) => {
-      if (!arr?.length) return [];
-      // batter 배열 또는 객체 처리
-      const batArr = Array.isArray(arr) ? arr : (arr.batter || []);
-      const om = {};
-      batArr.forEach(p => {
-        const key = p.batOrder || p.order || p.n;
-        if (!om[key]) om[key] = [];
-        om[key].push(p);
-      });
-      return Object.entries(om).sort(([a],[b])=>+a-+b).map(([o,ps]) => {
-        const cur = ps.find(p=>p.cin==='true'||p.cin===true) || ps.find(p=>!p.cout) || ps[ps.length-1];
-        const replaced = ps.find(p=>(p.cout==='true'||p.cout===true) && p!==cur);
-        const starterForPos = replaced || cur;
-        return {
-          n:+o, order:+o,
-          name: cur.name || cur.playerName || '',
-          p: cur.posName || cur.position || cur.pos || '',
-          pos: cur.posName || cur.position || cur.pos || '',
-          sub: replaced?.name || null,
-          starterName: starterForPos?.name || cur.name || '',
-          starterPos: starterForPos?.posName || starterForPos?.pos || cur.posName || '',
-          hit: cur.hit||0, ab: cur.ab||0, rbi: cur.rbi||0
-        };
-      });
-    };
-    const parsePitchers = (arr) => {
-      const pArr = Array.isArray(arr) ? arr : (arr?.pitcher || []);
-      return pArr.map(p=>({ seqno:p.seqno, name:p.name||p.playerName||'', inn:p.inn||'0', er:p.er||0, kk:p.kk||0 }));
-    };
+    // console.log('[lineup raw keys]', result._raw_keys); // 디버그
 
-    if (!homeL && !awayL) return gs ? { currentGameState: gs } : null;
+    if (!homeL && !awayL) {
+      return gs ? { currentGameState: gs } : null;
+    }
 
-    // batter 배열 추출 (homeL이 {batter:[]} 형태이거나 배열 자체이거나)
-    const homeBatterArr = Array.isArray(homeL) ? homeL : (homeL?.batter || []);
-    const awayBatterArr = Array.isArray(awayL) ? awayL : (awayL?.batter || []);
-    const homePitcherArr = Array.isArray(homeL) ? [] : (homeL?.pitcher || []);
-    const awayPitcherArr = Array.isArray(awayL) ? [] : (awayL?.pitcher || []);
-
+    // pcode → 이름 맵 (gs 베이스 이름 추출용)
     const pcodeMap = {};
-    [...homeBatterArr, ...homePitcherArr, ...awayBatterArr, ...awayPitcherArr]
-      .forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name || p.playerName; });
+    const allP = [...(homeL?.batter||[]), ...(homeL?.pitcher||[]), ...(awayL?.batter||[]), ...(awayL?.pitcher||[])];
+    allP.forEach(p => { if(p.pcode) pcodeMap[p.pcode] = p.name || p.playerName; });
 
-    const buildOrderMap = (batters) => {
-      const om = {};
-      batters.forEach(p => {
-        const key = p.batOrder || p.order;
-        if(!om[key]) om[key]=[];
-        om[key].push(p);
+    // 타자 순서맵 (베이스 주자 이름)
+    const buildOM = (arr) => {
+      const o2n = {};
+      (Array.isArray(arr) ? arr : (arr?.batter||[])).forEach(p => {
+        const k = p.batOrder||p.order;
+        if (!o2n[k]) o2n[k] = [];
+        o2n[k].push(p);
       });
       const res = {};
-      Object.entries(om).forEach(([o,ps]) => {
-        const cur = ps.find(p=>p.cin==='true'||p.cin===true) || ps[ps.length-1];
+      Object.entries(o2n).forEach(([o,ps]) => {
+        const cur = ps.find(p=>p.cin==='true'||p.cin===true)||ps[ps.length-1];
         res[o] = cur.name || cur.playerName || '';
       });
       return res;
     };
-    const homeOrderMap = buildOrderMap(homeBatterArr);
-    const awayOrderMap = buildOrderMap(awayBatterArr);
+    const homeOM = buildOM(homeL);
+    const awayOM = buildOM(awayL);
 
     let enrichedGs = gs || null;
     if (gs) {
       const g = state.modalGame;
       const info = g?.inningInfo || '';
-      const isTop = info.includes('초');
-      const atkOrderMap = isTop ? awayOrderMap : homeOrderMap;
-      const baseToName = (val) => (!val || val==='0') ? null : (atkOrderMap[val] || null);
+      const isTop = info.includes('초') || !info.includes('말');
+      const atkOM = isTop ? awayOM : homeOM;
       enrichedGs = {
         ...gs,
         _inningInfo: info,
         pitcherName: pcodeMap[gs.pitcher] || gs.pitcherName || null,
-        batterName: pcodeMap[gs.batter] || gs.batterName || null,
-        base1Name: baseToName(gs.base1),
-        base2Name: baseToName(gs.base2),
-        base3Name: baseToName(gs.base3),
+        batterName:  pcodeMap[gs.batter]  || gs.batterName  || null,
+        base1Name: atkOM[gs.base1] || null,
+        base2Name: atkOM[gs.base2] || null,
+        base3Name: atkOM[gs.base3] || null,
       };
     }
 
     return {
-      home: { batters: parseBatters(homeBatterArr), pitchers: parsePitchers(homePitcherArr) },
-      away: { batters: parseBatters(awayBatterArr), pitchers: parsePitchers(awayPitcherArr) },
+      home: { batters: _parseBatters(homeL), pitchers: _parsePitchers(homeL) },
+      away: { batters: _parseBatters(awayL), pitchers: _parsePitchers(awayL) },
       currentGameState: enrichedGs,
     };
   } catch(e) {
@@ -2665,7 +2656,7 @@ function openModal(idx,date) {
   renderModal(D()); history.pushState({modal:true},'');
   document.body.style.overflow='hidden';
 
-  // 라인업 & 경기 상황 브라우저 직접 fetch (SCHEDULED 포함 모든 경기)
+  // 라인업 & 경기 상황 브라우저 직접 fetch
   const g = state.modalGame;
   if (g && g.gameId) {
     const inn = g.inning || 1;
@@ -3289,9 +3280,21 @@ function updateRelayUI() {
   // 다이아몬드 업데이트
   const diamondEl = document.getElementById('relay-diamond');
   const schGame = SCH.find(s => String(s.gameId) === String(_relayGameId));
+  // lineup 우선순위: SCH > _relayData 직접 파싱
+  let relayLineup = schGame?.lineup || null;
+  if (!relayLineup && _relayData) {
+    const td2 = _relayData.textRelayData || _relayData;
+    const hL = td2.homeLineup || _relayData.homeLineup;
+    const aL = td2.awayLineup || _relayData.awayLineup;
+    if (hL || aL) {
+      relayLineup = {
+        home: { batters: _parseBatters(hL), pitchers: _parsePitchers(hL) },
+        away: { batters: _parseBatters(aL), pitchers: _parsePitchers(aL) },
+      };
+    }
+  }
   if (diamondEl) {
-    // gs가 없더라도 기본 틀은 그려지도록 renderRelayDiamond 내부에서 처리됨
-    diamondEl.innerHTML = renderRelayDiamond(gs, schGame?.lineup, _relayAway, _relayHome);
+    diamondEl.innerHTML = renderRelayDiamond(gs, relayLineup, _relayAway, _relayHome);
     diamondEl.style.background = dark ? '#111827' : '#f8f8f8';
   }
 
@@ -3360,14 +3363,25 @@ window.openRelay = async function(gameId, away, home, inn) {
   // 데이터 로드 전 기본 UI 틀 먼저 표시
   updateRelayUI();
   
-  const data = await fetchRelayData(gameId, _relayInn);
-  if (data) { 
-    _relayData = data; 
-    updateRelayUI(); 
+  // 중계 데이터 + lineup 병렬 fetch
+  const [data, luData] = await Promise.all([
+    fetchRelayData(gameId, _relayInn),
+    (schGame?.lineup ? Promise.resolve(null) : fetchLineupDirect(gameId, _relayInn)),
+  ]);
+  if (data) {
+    _relayData = data;
   } else {
     const body = document.getElementById('relay-body');
     if (body) body.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(0,0,0,0.35)">중계 데이터를 불러올 수 없습니다.</div>';
   }
+  if (luData) {
+    const idx3 = SCH.findIndex(s=>String(s.gameId)===String(gameId));
+    if (idx3 !== -1) {
+      if (luData.home||luData.away) SCH[idx3].lineup = luData;
+      if (luData.currentGameState) SCH[idx3].currentGameState = luData.currentGameState;
+    }
+  }
+  if (data || luData) updateRelayUI();
   
   clearInterval(_relayInterval);
   const schGame = SCH.find(s=>s.gameId===gameId);
