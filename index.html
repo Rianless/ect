@@ -2945,64 +2945,15 @@ setInterval(fetchTodayScores, 30000);
 async function fetchRelayData(gameId, inn) {
   if (!gameId) return null;
   const inning = Math.max(1, inn || 1);
-  const HEADERS = { Accept: 'application/json' };
-
-  // 텍스트 중계 파싱 헬퍼
-  function findTextRelays(obj) {
-    if (!obj || typeof obj !== 'object') return null;
-    if (Array.isArray(obj)) {
-      if (obj.length > 0 && (obj[0].title || obj[0].text || obj[0].type != null)) return obj;
-      return null;
-    }
-    if (obj.textRelays) return obj.textRelays;
-    if (obj.relays) return obj.relays;
-    if (obj.list) return obj.list;
-    for (const key in obj) {
-      const found = findTextRelays(obj[key]);
-      if (found) return found;
-    }
-    return null;
-  }
 
   try {
-    // 1차: text-relay 엔드포인트 (종료 경기에 더 정확)
-    let result = null;
-    try {
-      const r1 = await fetch(
-        `https://api-gw.sports.naver.com/schedule/games/${gameId}/text-relay?inning=${inning}&isHighlight=false`,
-        { headers: HEADERS }
-      );
-      if (r1.ok) {
-        const d1 = await r1.json();
-        if (d1?.result) result = d1.result;
-      }
-    } catch(e) {}
-
-    // 2차: game-polling 폴백
-    if (!result) {
-      try {
-        const r2 = await fetch(
-          `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inning}&isHighlight=false`,
-          { headers: HEADERS }
-        );
-        if (r2.ok) {
-          const d2 = await r2.json();
-          if (d2?.result) result = d2.result;
-        }
-      } catch(e) {}
-    }
-
-    if (!result) return null;
-
-    const textRelays = findTextRelays(result) || [];
-    const gs = result.textRelayData?.currentGameState || result.currentGameState || null;
-
-    return {
-      gameId: String(gameId),
-      currentGameState: gs,
-      inningInfo: result.game?.statusInfo || null,
-      textRelays,
-    };
+    // Vercel 서버사이드 프록시를 통해 호출 (CORS 우회)
+    const url = `/api/kboScores?gameId=${encodeURIComponent(gameId)}&inning=${inning}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`proxy ${r.status}`);
+    const data = await r.json();
+    // kboScores.js는 gameId 있을 때 단일 게임 객체를 바로 반환
+    return data || null;
   } catch(e) {
     console.error("[Relay] fetchRelayData error:", e);
     return null;
