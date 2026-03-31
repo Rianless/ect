@@ -63,7 +63,8 @@
     /* 중계 전체화면 패널 */
     #relay-panel{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:none;align-items:flex-end;justify-content:center;animation:fadeIn 0.2s}
     #relay-panel.open{display:flex}
-    #relay-box{width:100%;max-width:520px;height:95vh;background:#fff;border-radius:22px 22px 0 0;display:flex;flex-direction:column;animation:slideUp 0.3s ease;box-shadow:0 -4px 16px rgba(0,0,0,0.15)}
+    #relay-box{width:100%;max-width:520px;height:95vh;background:#fff;border-radius:22px 22px 0 0;display:flex;flex-direction:column;animation:slideUp 0.3s ease;box-shadow:0 -4px 16px rgba(0,0,0,0.15);touch-action:pan-y}
+    #relay-box.closing{animation:slideDown 0.28s ease forwards}
     body.dark #relay-box{background:#0F1525;color:#fff}
     #relay-header{padding:14px 18px 10px;border-bottom:1px solid rgba(0,0,0,0.08);flex-shrink:0}
     body.dark #relay-header{border-color:rgba(255,255,255,0.08)}
@@ -2989,8 +2990,13 @@ function renderRelayDiamond(gs, lineup, away, home) {
   const batterName = gs._batterName || '';
   const b1c = base1?'#FFB300':'#d4a44c', b2c = base2?'#FFB300':'#d4a44c', b3c = base3?'#FFB300':'#d4a44c';
 
-  // 수비팀 결정: lineup에 away/home 모두 있으므로 away 기본 (중계 패널에선 호출측에서 결정)
-  const rawDefBatters = lineup?.away?.batters || [];
+  // 수비팀 결정: 이닝 초(top)=away공격→home수비, 말(bottom)=home공격→away수비
+  const inningInfo2 = (gs?._inningInfo || '');
+  const isBottom2 = inningInfo2.includes('말');
+  // 초이면 home 수비, 말이면 away 수비
+  const rawDefBatters = isBottom2
+    ? (lineup?.away?.batters || [])
+    : (lineup?.home?.batters || []);
   const defLineup2 = buildDisplayLineup(rawDefBatters);
   // posSeenMap: 같은 포지션 교체 시 현재 선수만 표시
   const posSeen2 = {};
@@ -3134,11 +3140,15 @@ function updateRelayUI() {
   const game = _relayData || {};
   const gs = game.currentGameState || null;
 
+  // gs에 inningInfo 주입 (renderRelayDiamond에서 수비팀 판별용)
+  const inningInfoStr = game.inningInfo || (gs?.inningDisplay) || '';
+  if (gs) gs._inningInfo = inningInfoStr;
+
   // 헤더 업데이트
   const title = document.getElementById('relay-title');
   const sub = document.getElementById('relay-sub');
   if (title) title.textContent = `${_relayAway} vs ${_relayHome}`;
-  if (sub) sub.textContent = game.inningInfo || (gs ? gs.inningDisplay : '');
+  if (sub) sub.textContent = inningInfoStr;
 
   // 다이아몬드 업데이트
   const diamondEl = document.getElementById('relay-diamond');
@@ -3231,13 +3241,39 @@ window.openRelay = async function(gameId, away, home, inn) {
       if(d){_relayData=d;updateRelayUI();}
     }, 30000);
   }
+
+  // 아래 스와이프로 닫기
+  const box2 = document.getElementById('relay-box');
+  if (box2) {
+    let _rty = null, _canClose = false;
+    box2.ontouchstart = e => {
+      _rty = e.touches[0].clientY;
+      _canClose = (box2.scrollTop <= 0);
+    };
+    box2.ontouchmove = e => {
+      if (!_canClose || _rty === null) return;
+      const dy = e.touches[0].clientY - _rty;
+      if (dy > 0) e.preventDefault();
+    };
+    box2.ontouchend = e => {
+      if (_rty === null) return;
+      const dy = e.changedTouches[0].clientY - _rty;
+      if (_canClose && dy > 60) closeRelay();
+      _rty = null;
+    };
+  }
 };
 
 window.closeRelay = function() {
+  const box = document.getElementById('relay-box');
   const panel = document.getElementById('relay-panel');
-  if (panel) panel.style.display = 'none';
-  document.body.style.overflow = '';
+  if (box) box.classList.add('closing');
   clearInterval(_relayInterval); _relayInterval = null;
+  setTimeout(() => {
+    if (panel) panel.style.display = 'none';
+    if (box) box.classList.remove('closing');
+    document.body.style.overflow = '';
+  }, 280);
 };
 
 document.getElementById('relay-panel')?.addEventListener('click', function(e) {
