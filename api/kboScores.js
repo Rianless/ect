@@ -118,15 +118,33 @@ export default async function handler(req, res) {
       resultText: extractResult(item),
     }));
 
-    // currentGameState: detail 직접 필드 또는 textRelays에서 추출
-    let bestGs = detail?.currentGameState || detail?.textRelayData?.currentGameState || null;
+    // currentGameState: detail 직접 → textRelayData → rawRelays 순으로 탐색
+    let bestGs = detail?.currentGameState
+      || detail?.textRelayData?.currentGameState
+      || null;
     if (!bestGs && rawRelays.length) {
-      for (const relay of rawRelays) {
+      // rawRelays는 시간순이므로 마지막부터 탐색 (가장 최신)
+      for (let ri = 0; ri < rawRelays.length; ri++) {
+        const relay = rawRelays[ri];
+        if (relay.currentGameState) { bestGs = relay.currentGameState; break; }
         const opts = relay.textOptions || [];
-        const candidate = relay.currentGameState
-          || (opts.length ? opts[opts.length-1]?.currentGameState : null);
-        if (candidate) { bestGs = candidate; break; }
+        for (let oi = opts.length - 1; oi >= 0; oi--) {
+          if (opts[oi]?.currentGameState) { bestGs = opts[oi].currentGameState; break; }
+        }
+        if (bestGs) break;
       }
+    }
+    // bestGs 필드 정규화 (네이버 API는 다양한 필드명 사용)
+    if (bestGs) {
+      bestGs = {
+        ...bestGs,
+        ball:   bestGs.ball   ?? bestGs.ballCount   ?? bestGs.balls   ?? 0,
+        strike: bestGs.strike ?? bestGs.strikeCount ?? bestGs.strikes ?? 0,
+        out:    bestGs.out    ?? bestGs.outCount     ?? bestGs.outs    ?? 0,
+        base1:  bestGs.base1  ?? bestGs.runner1      ?? 0,
+        base2:  bestGs.base2  ?? bestGs.runner2      ?? 0,
+        base3:  bestGs.base3  ?? bestGs.runner3      ?? 0,
+      };
     }
 
     // 선발투수: 네이버 lineup API 응답의 다양한 경로 커버
