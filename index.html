@@ -2820,18 +2820,49 @@ function parseBrowserPitchers(pitchers) {
 
 function buildBrowserLineup(detail) {
   if (!detail) return null;
+
+  // 네이버 lineup API가 반환할 수 있는 다양한 구조 시도
   const td = detail.textRelayData || detail;
-  const home = td.homeLineup || detail.homeLineup;
-  const away = td.awayLineup || detail.awayLineup;
+
+  // 구조 1: homeLineup / awayLineup
+  let home = td.homeLineup || detail.homeLineup;
+  let away = td.awayLineup || detail.awayLineup;
+
+  // 구조 2: homeTeamLineup / awayTeamLineup
+  if (!home) home = td.homeTeamLineup || detail.homeTeamLineup;
+  if (!away) away = td.awayTeamLineup || detail.awayTeamLineup;
+
+  // 구조 3: lineup.home / lineup.away
+  if (!home && detail.lineup) home = detail.lineup.home;
+  if (!away && detail.lineup) away = detail.lineup.away;
+
+  // 구조 4: batters/pitchers가 최상위에 home/away 구분 없이 있는 경우
+  // homeBatters / awayBatters
+  if (!home && (detail.homeBatters || detail.homePitchers)) {
+    home = { batter: detail.homeBatters, pitcher: detail.homePitchers };
+  }
+  if (!away && (detail.awayBatters || detail.awayPitchers)) {
+    away = { batter: detail.awayBatters, pitcher: detail.awayPitchers };
+  }
+
+  // 구조 5: batters 배열이 직접 있는 경우 (side 필드로 구분)
+  if (!home && !away && Array.isArray(detail.batters)) {
+    const hb = detail.batters.filter(p => p.side === 'home' || p.teamCode === detail.homeTeamCode);
+    const ab = detail.batters.filter(p => p.side === 'away' || p.teamCode === detail.awayTeamCode);
+    if (hb.length) home = { batter: hb };
+    if (ab.length) away = { batter: ab };
+  }
+
   if (!home && !away) return null;
+
   return {
     home: {
-      batters: parseBrowserBatters(home?.batter),
-      pitchers: parseBrowserPitchers(home?.pitcher),
+      batters: parseBrowserBatters(home?.batter || home?.batters),
+      pitchers: parseBrowserPitchers(home?.pitcher || home?.pitchers),
     },
     away: {
-      batters: parseBrowserBatters(away?.batter),
-      pitchers: parseBrowserPitchers(away?.pitcher),
+      batters: parseBrowserBatters(away?.batter || away?.batters),
+      pitchers: parseBrowserPitchers(away?.pitcher || away?.pitchers),
     },
   };
 }
