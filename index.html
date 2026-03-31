@@ -1021,10 +1021,12 @@ function renderCalSplit(d) {
     const statusBadge = kg&&kg.status==='LIVE'?'<div style="font-size:6px;background:#E31837;color:#fff;border-radius:2px;padding:0 2px;font-weight:700;line-height:1.4">LIVE</div>':'';
     // 날짜 스타일: 홈경기=빨간동그라미, 원정=기본, 선택=배경만
     const dayExtraStyle = isKiaGame&&isKiaHome ? 'background:rgba(227,24,55,0.15);border-color:#E31837;' : '';
+    const kiaLost = kg&&kg.status==='FINAL'&&(()=>{const ks=isHome?kg.homeScore:kg.awayScore,os=isHome?kg.awayScore:kg.homeScore;return ks!=null&&os!=null&&ks<os;})();
+    const logoGrayStyle = kiaLost?'filter:grayscale(1);opacity:0.72;':'';
     cells+=`<div class="cal-cell${isSel?' sel':''}${isPast?' past':''}${isCurrentWeek?' current-week':''}" onclick="selDate('${ds}')">
       <div class="cal-day${isToday?' today':''}${dow===5?' sat':dow===6?' sun':''}" style="color:${dayColor};${dayExtraStyle}">${i}</div>
       ${isKiaGame?`<div style="display:flex;flex-direction:column;align-items:center;gap:1px">
-        <div style="${kg&&kg.status==='FINAL'?'filter:grayscale(1);opacity:0.72;':''}">${logo(oppKey,22)}</div>
+        <div style="${logoGrayStyle}">${logo(oppKey,22)}</div>
         ${statusBadge||`<div style="font-size:7px;color:${d.sub};font-weight:600;line-height:1">${kg.time}</div>`}
       </div>`:''}
     </div>`;
@@ -1467,8 +1469,9 @@ function renderMemos(d) {
         const date=parts[0], away=parts[1], home=parts[2];
         let memoData={};
         try{ memoData=JSON.parse(raw); if(typeof memoData==='string') memoData={text:raw}; }catch(e){ memoData={text:raw}; }
-        if(memoData.text||memoData.photo||memoData.watch)
-          memos.push({date,away,home,memo:memoData.text||'',watch:memoData.watch||'',photo:memoData.photo||null});
+        const photos = memoData.photos||(memoData.photo?[memoData.photo]:[]);
+        if(memoData.text||photos.length||memoData.watch)
+          memos.push({date,away,home,memo:memoData.text||'',watch:memoData.watch||'',photos});
       }
     }
   }
@@ -1494,7 +1497,26 @@ function renderMemos(d) {
     html += '</div>';
     if(m.watch) html += '<span style="font-size:10px;font-weight:700;background:'+(m.watch==='직관'?'rgba(227,24,55,0.1)':'rgba(0,120,255,0.1)')+';color:'+(m.watch==='직관'?'#E31837':'#0078ff')+';border-radius:5px;padding:2px 7px;margin-bottom:6px;display:inline-block">'+(m.watch==='직관'?'⚾ 직관':'📺 집관')+'</span>';
     if(m.memo) html += '<div style="font-size:13px;color:'+d.text+';line-height:1.6;white-space:pre-wrap;margin-top:4px">'+m.memo+'</div>';
-    if(m.photo) html += '<img src="'+m.photo+'" style="width:100%;border-radius:8px;margin-top:8px;max-height:160px;object-fit:cover"/>';
+    if(m.photos&&m.photos.length){
+      const memoId='rec-memo-'+m.date+'-'+m.away+'-'+m.home;
+      const slideId='slide-'+memoId;
+      const pj=JSON.stringify(m.photos).replace(/"/g,'&quot;');
+      html+='<div onclick="event.stopPropagation()" style="margin-top:8px;border-radius:10px;overflow:hidden;background:#111;position:relative" id="'+slideId+'" data-cur="0" data-photos="'+pj+'">';
+      m.photos.forEach(function(src,pi){
+        html+='<div class="sl-item" style="display:'+(pi===0?'block':'none')+'">'
+          +'<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(''+slideId+'')" '
+          +'style="width:100%;height:auto;max-height:220px;object-fit:contain;display:block;cursor:zoom-in"/>'
+          +'</div>';
+      });
+      if(m.photos.length>1){
+        html+='<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:none">'
+          +'<button onclick="event.stopPropagation();recSlide(''+slideId+'',-1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">&#8249;</button>'
+          +'<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:2px 8px">1/'+m.photos.length+'</span>'
+          +'<button onclick="event.stopPropagation();recSlide(''+slideId+'',1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">&#8250;</button>'
+          +'</div>';
+      }
+      html+='</div>';
+    }
     html += '</div>';
   });
   return html;
