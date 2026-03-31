@@ -1307,10 +1307,8 @@ function renderBaseballRecord(d) {
       });
       // 좌우 버튼 + 카운터는 sl-item 밖에 하나만 생성 (버튼 중복 발화 방지)
       if(recPhotos.length > 1) {
-        html += '<div style="position:absolute;bottom:10px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:12px;pointer-events:none">';
-        html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',- 1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">‹</button>';
+        html += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">';
         html += '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+recPhotos.length+'</span>';
-        html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">›</button>';
         html += '</div>';
       }
       html += '</div>';
@@ -1442,10 +1440,8 @@ function _recRenderPhotos(container, photos, date, away, home) {
   });
   // 좌우 버튼 + 카운터는 sl-item 밖에 하나만 생성 (버튼 중복 발화 방지)
   if(photos.length > 1) {
-    html += '<div style="position:absolute;bottom:10px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:12px;pointer-events:none">'
-      + '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',- 1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">‹</button>'
+    html += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
       + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+photos.length+'</span>'
-      + '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">›</button>'
       + '</div>';
   }
   html += '</div>';
@@ -1509,10 +1505,8 @@ function renderMemos(d) {
           +'</div>';
       });
       if(m.photos.length>1){
-        html+='<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:10px;pointer-events:none">'
-          +'<button onclick="event.stopPropagation();recSlide(this.closest(&quot;[id^=slide-]&quot;).id,-1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>'
+        html+='<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
           +'<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:2px 8px">1/'+m.photos.length+'</span>'
-          +'<button onclick="event.stopPropagation();recSlide(this.closest(&quot;[id^=slide-]&quot;).id,1)" style="pointer-events:auto;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>'
           +'</div>';
       }
       html+='</div>';
@@ -2464,15 +2458,21 @@ function renderModal(d) {
           <div id="memo-photo-preview" style="margin-top:8px">${(()=>{
             const photos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
             if(!photos.length) return '';
-            const photosJson = JSON.stringify(photos).replace(/"/g,'&quot;');
-            return `<div data-photos="${photosJson}" style="display:flex;flex-wrap:wrap;gap:6px">`
-              + photos.map((src,i) =>
-                `<div style="position:relative;width:80px;height:80px;flex-shrink:0">
-                  <img src="${src}" onclick="openPhotoViewer(JSON.parse(this.closest('[data-photos]').dataset.photos),${i})" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block;cursor:zoom-in"/>
-                  <button onclick="deleteMemoPhoto(${i})" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
-                </div>`
-              ).join('')
-              + `</div>`;
+            const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
+            let h = '<div id="memo-slide" data-cur="0" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
+            photos.forEach((src,i) => {
+              h += '<div class="sl-item" style="display:'+(i===0?'block':'none')+';position:relative">'
+                + '<img src="'+src+'" onclick="openPhotoViewer(JSON.parse(document.getElementById(\'memo-slide\').dataset.photos),parseInt(document.getElementById(\'memo-slide\').dataset.cur)||0)" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
+                + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
+                + '</div>';
+            });
+            if(photos.length > 1) {
+              h += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
+                + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">1/'+photos.length+'</span>'
+                + '</div>';
+            }
+            h += '</div>';
+            return h;
           })()}</div>
         </div>
         <button onclick="closeModal()" style="width:100%;margin-top:14px;padding:14px;background:#E31837;color:#fff;border-radius:12px;font-size:15px;font-weight:800;font-family:'Noto Sans KR',sans-serif;border:none;cursor:pointer">✓ 완료</button>
@@ -2569,14 +2569,22 @@ function renderModal(d) {
     if(!preview) return;
     if(!photos || !photos.length) { preview.innerHTML = ''; return; }
     const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
-    preview.innerHTML = '<div data-photos="'+pj+'" style="display:flex;flex-wrap:wrap;gap:6px">'
-      + photos.map((src,i) =>
-        '<div style="position:relative;width:80px;height:80px;flex-shrink:0">'
-        + '<img src="'+src+'" onclick="openPhotoViewer(JSON.parse(this.closest(\'[data-photos]\').dataset.photos),'+i+')" style="width:80px;height:80px;border-radius:8px;object-fit:cover;display:block;cursor:zoom-in"/>'
-        + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
-        + '</div>'
-      ).join('')
-      + '</div>';
+    const existingSlide = document.getElementById('memo-slide');
+    const curIdx = existingSlide ? (parseInt(existingSlide.dataset.cur) || 0) : 0;
+    let h = '<div id="memo-slide" data-cur="'+curIdx+'" data-photos="'+pj+'" style="position:relative;border-radius:10px;background:#111;overflow:hidden">';
+    photos.forEach(function(src, i) {
+      h += '<div class="sl-item" style="display:'+(i===curIdx?'block':'none')+';position:relative">'
+        + '<img src="'+src+'" onclick="openPhotoViewer(JSON.parse(document.getElementById(\'memo-slide\').dataset.photos),parseInt(document.getElementById(\'memo-slide\').dataset.cur)||0)" style="width:100%;height:auto;max-height:280px;object-fit:contain;display:block;cursor:zoom-in;border-radius:10px"/>'
+        + '<button onclick="deleteMemoPhoto('+i+')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>'
+        + '</div>';
+    });
+    if(photos.length > 1) {
+      h += '<div style="position:absolute;bottom:8px;left:0;right:0;display:flex;align-items:center;justify-content:center;pointer-events:none">'
+        + '<span class="sl-counter" style="background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 10px">'+(curIdx+1)+'/'+photos.length+'</span>'
+        + '</div>';
+    }
+    h += '</div>';
+    preview.innerHTML = h;
   }
 
   document.getElementById('memo-input').addEventListener('input', e => {
