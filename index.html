@@ -1474,19 +1474,6 @@ function saveTodos(list) {
   localStorage.setItem('kbo_todos', JSON.stringify(list));
 }
 
-let _todoSortAsc = false; // false = 최신순(기본), true = 오래된순
-
-// 정렬 버튼은 렌더 후 이 함수로 이벤트 연결 (innerHTML 이벤트 문제 우회)
-function _attachSortBtn() {
-  const btn = document.getElementById('todo-sort-btn');
-  if (!btn) return;
-  btn.onclick = function() {
-    _todoSortAsc = !_todoSortAsc;
-    btn.textContent = _todoSortAsc ? '↑ 오래된순' : '↓ 최신순';
-    _refreshTodoList();
-  };
-}
-
 function renderTodoMemo(d) {
   const todos = getTodos();
   const pad2 = n => String(n).padStart(2,'0');
@@ -1510,16 +1497,7 @@ function renderTodoMemo(d) {
       border-radius:10px;font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;white-space:nowrap">추가</button>
   </div>`;
 
-  // 정렬 버튼 — todo-list-container 완전 바깥. innerHTML 교체와 무관하게 유지됨
-  html += `<div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px">
-    <button id="todo-sort-btn" onclick="toggleTodoSort()"
-      style="font-size:11px;font-weight:700;color:${d.sub};background:${d.bg};border:1px solid ${d.bgB};
-      border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'Noto Sans KR',sans-serif">
-      ${_todoSortAsc ? '↑ 오래된순' : '↓ 최신순'}
-    </button>
-  </div>`;
-
-  // 리스트 컨테이너 — _refreshTodoList가 여기만 갱신
+  // 리스트 컨테이너
   html += `<div id="todo-list-container">`;
 
   if (!todos.length) {
@@ -1535,9 +1513,7 @@ function renderTodoMemo(d) {
     groups[t.date].push(t);
   });
 
-  const sortedDates = Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a));
-
-  sortedDates.forEach((date) => {
+  Object.keys(groups).sort((a,b) => b.localeCompare(a)).forEach(date => {
     const [y,m,da] = date.split('-');
     const dayObj = new Date(date+'T12:00:00');
     const dayLabel = dw[dayObj.getDay()];
@@ -1558,15 +1534,12 @@ function renderTodoMemo(d) {
           tagBadge = `<div style="margin-bottom:3px"><span style="font-size:10px;background:rgba(227,24,55,0.1);color:#E31837;border-radius:4px;padding:1px 6px;font-weight:700">⚾ ${tAway}↔${tHome}</span></div>`;
         }
       }
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${t.tag?'rgba(227,24,55,0.2)':d.bgB};border-radius:10px;margin-bottom:6px">
-        <button onclick="toggleTodo('${t.id}')"
-          style="width:22px;height:22px;border-radius:50%;border:2px solid ${t.done?'#E31837':d.bgB};
-          background:${t.done?'#E31837':'transparent'};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
-          ${t.done?'<span style="color:#fff;font-size:12px">✓</span>':''}
-        </button>
+      // 카드 전체 클릭으로 완료 토글, 원은 done이면 빨간색으로 꽉 채움
+      html += `<div onclick="toggleTodo('${t.id}')" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${t.tag?'rgba(227,24,55,0.2)':d.bgB};border-radius:10px;margin-bottom:6px;cursor:pointer">
+        <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;background:${t.done?'#E31837':'transparent'};border:2px solid ${t.done?'#E31837':d.bgB}"></div>
         <div style="flex:1;min-width:0">${tagBadge}<span style="font-size:13px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''}line-height:1.4">${t.text}</span></div>
-        <button onclick="deleteTodo('${t.id}')"
-          style="color:${d.sub};font-size:16px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1">×</button>
+        <button onclick="event.stopPropagation();deleteTodo('${t.id}')"
+          style="color:${d.sub};font-size:16px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0">×</button>
       </div>`;
     });
 
@@ -1608,14 +1581,8 @@ window._refreshTodoList = function() {
 
   if (!todos.length) {
     listEl.innerHTML = `<div style="text-align:center;padding:20px 0;color:${d.sub};font-size:13px">메모가 없어요. 위에 입력해보세요!</div>`;
-    const sb = document.getElementById('todo-sort-btn');
-    if (sb) sb.textContent = _todoSortAsc ? '↑ 오래된순' : '↓ 최신순';
     return;
   }
-
-  // 정렬 버튼 텍스트만 갱신 (버튼 DOM은 건드리지 않음)
-  const sortBtn = document.getElementById('todo-sort-btn');
-  if (sortBtn) sortBtn.textContent = _todoSortAsc ? '↑ 오래된순' : '↓ 최신순';
 
   const groups = {};
   todos.forEach(t => {
@@ -1623,10 +1590,8 @@ window._refreshTodoList = function() {
     groups[t.date].push(t);
   });
 
-  const sortedDates2 = Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a));
-
   let html = '';
-  sortedDates2.forEach((date) => {
+  Object.keys(groups).sort((a,b) => b.localeCompare(a)).forEach(date => {
     const [y,m,da] = date.split('-');
     const dayObj = new Date(date+'T12:00:00');
     const dayLabel = dw[dayObj.getDay()];
@@ -1645,15 +1610,11 @@ window._refreshTodoList = function() {
           tagBadge2 = `<div style="margin-bottom:3px"><span style="font-size:10px;background:rgba(227,24,55,0.1);color:#E31837;border-radius:4px;padding:1px 6px;font-weight:700">⚾ ${tAway}↔${tHome}</span></div>`;
         }
       }
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${t.tag?'rgba(227,24,55,0.2)':d.bgB};border-radius:10px;margin-bottom:6px">
-        <button onclick="toggleTodo('${t.id}')"
-          style="width:22px;height:22px;border-radius:50%;border:2px solid ${t.done?'#E31837':d.bgB};
-          background:${t.done?'#E31837':'transparent'};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
-          ${t.done?'<span style="color:#fff;font-size:12px">✓</span>':''}
-        </button>
+      html += `<div onclick="toggleTodo('${t.id}')" style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${t.tag?'rgba(227,24,55,0.2)':d.bgB};border-radius:10px;margin-bottom:6px;cursor:pointer">
+        <div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;background:${t.done?'#E31837':'transparent'};border:2px solid ${t.done?'#E31837':d.bgB}"></div>
         <div style="flex:1;min-width:0">${tagBadge2}<span style="font-size:13px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''}line-height:1.4">${t.text}</span></div>
-        <button onclick="deleteTodo('${t.id}')"
-          style="color:${d.sub};font-size:16px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1">×</button>
+        <button onclick="event.stopPropagation();deleteTodo('${t.id}')"
+          style="color:${d.sub};font-size:16px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0">×</button>
       </div>`;
     });
     html += `</div>`;
