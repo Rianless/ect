@@ -3024,7 +3024,7 @@ function renderRelayText(relays, away, home) {
     const isInningHeader = typeKey === 0 || (typeof typeKey === 'string' && typeKey === 'INNING')
       || (title.match(/^\d+회(초|말)/) && !title.includes('번타자') && !title.includes('|'));
     if (isInningHeader) {
-      return \`<div style="text-align:center;padding:10px 16px;font-size:12px;font-weight:700;color:\${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'};background:\${dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'};border-bottom:1px solid \${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}">⚾ \${title}</div>\`;
+      return `<div style="text-align:center;padding:10px 16px;font-size:12px;font-weight:700;color:${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'};background:${dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'};border-bottom:1px solid ${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}">⚾ ${title}</div>`;
     }
 
     // 배지: 제목 키워드로 분류 (typeKey와 무관하게 항상 동작)
@@ -3061,19 +3061,19 @@ function renderRelayText(relays, away, home) {
     }
 
     const scoreDisp = (awayS!==''&&homeS!=='') ?
-      \`<span style="font-size:11px;color:\${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'}">
-        \${away} <b style="color:\${awayColor}">\${awayS}</b>
+      `<span style="font-size:11px;color:${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'}">
+        ${away} <b style="color:${awayColor}">${awayS}</b>
         <span style="margin:0 3px">:</span>
-        <b style="color:\${homeColor}">\${homeS}</b> \${home}
-      </span>\` : '';
+        <b style="color:${homeColor}">${homeS}</b> ${home}
+      </span>` : '';
 
-    return \`<div style="padding:11px 16px;border-bottom:1px solid \${dark?'rgba(255,255,255,0.055)':'rgba(0,0,0,0.055)'};display:flex;align-items:flex-start;gap:10px">
-      <span style="flex-shrink:0;font-size:10px;font-weight:700;color:\${bdColor};background:\${bdBg};border:1px solid \${bdColor}33;border-radius:5px;padding:2px 7px;margin-top:2px;white-space:nowrap">\${badge||'　'}</span>
+    return `<div style="padding:11px 16px;border-bottom:1px solid ${dark?'rgba(255,255,255,0.055)':'rgba(0,0,0,0.055)'};display:flex;align-items:flex-start;gap:10px">
+      <span style="flex-shrink:0;font-size:10px;font-weight:700;color:${bdColor};background:${bdBg};border:1px solid ${bdColor}33;border-radius:5px;padding:2px 7px;margin-top:2px;white-space:nowrap">${badge||'　'}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;color:\${dark?'#fff':'#0A0E1A'};line-height:1.5">\${title}</div>
-        \${scoreDisp?\`<div style="margin-top:3px">\${scoreDisp}</div>\`:''}
+        <div style="font-size:13px;color:${dark?'#fff':'#0A0E1A'};line-height:1.5">${title}</div>
+        ${scoreDisp?`<div style="margin-top:3px">${scoreDisp}</div>`:''}
       </div>
-    </div>\`;
+    </div>`;
   }).join('');
 }
 
