@@ -3274,7 +3274,9 @@ function renderRelayText(relays, away, home) {
       badge='아웃'; bdColor='#555'; bdBg='rgba(0,0,0,0.07)';
     } else if (fullText.match(/아웃|출루/)) {
       badge='아웃'; bdColor='#555'; bdBg='rgba(0,0,0,0.07)';
-    } else if (fullText.match(/교체|대타|대주자|투수 교체/)) {
+    } else if (fullText.match(/투수.*:.*교체|투수 교체/)) {
+      badge='투수교체'; bdColor='#9C27B0'; bdBg='rgba(156,39,176,0.1)';
+    } else if (fullText.match(/교체|대타|대주자/)) {
       badge='교체'; bdColor='#FF9500'; bdBg='rgba(255,149,0,0.1)';
     } else if (fullText.match(/희생|희타|희플/)) {
       badge='희생'; bdColor='#888'; bdBg='rgba(0,0,0,0.07)';
@@ -3327,6 +3329,23 @@ function updateRelayUI() {
       if (gs) break;
     }
   }
+  // gs 있으면 pitcherName/batterName 보강 (textRelays 첫 항목에서)
+  if (gs && game.textRelays?.length) {
+    for (const relay of game.textRelays) {
+      const opts = relay.textOptions || [];
+      for (let oi = opts.length - 1; oi >= 0; oi--) {
+        const cgs = opts[oi]?.currentGameState;
+        if (cgs) {
+          if (!gs.pitcherName && cgs.pitcherName) gs.pitcherName = cgs.pitcherName;
+          if (!gs.batterName  && cgs.batterName)  gs.batterName  = cgs.batterName;
+          if (!gs.currentPitcherName && cgs.currentPitcherName) gs.currentPitcherName = cgs.currentPitcherName;
+          if (!gs.currentBatterName  && cgs.currentBatterName)  gs.currentBatterName  = cgs.currentBatterName;
+          break;
+        }
+      }
+      if (gs.pitcherName || gs.batterName) break;
+    }
+  }
 
   // gs에 inningInfo 주입 (renderRelayDiamond에서 수비팀 판별용)
   // currentGameState 안의 다양한 필드 + game.inningInfo 모두 확인
@@ -3336,9 +3355,28 @@ function updateRelayUI() {
     || '';
   if (gs) {
     gs._inningInfo = inningInfoStr;
-    // half 필드가 없으면 inningInfoStr에서 추론해서 half 세팅
-    if (!gs.half) {
-      gs.half = inningInfoStr.includes('말') ? 'B' : 'T';
+    if (!gs.half) gs.half = inningInfoStr.includes('말') ? 'B' : 'T';
+
+    // 투수/타자 이름 주입
+    // gs에서 직접 또는 lineup에서 현재 투수 추출
+    const schGame2 = SCH.find(s => String(s.gameId) === String(_relayGameId));
+    const isBottomHalf = inningInfoStr.includes('말') || gs.half === 'B';
+
+    // 투수: 수비팀 현재 투수
+    if (!gs._pitcherName) {
+      // currentGameState에서 직접 (pitcher, pitcherName, currentPitcher 등)
+      const rawP = gs.pitcherName || gs.currentPitcherName || gs.pitcher || '';
+      // SCH에서 현재 투수 (말이면 away 투수, 초이면 home 투수)
+      const schP = isBottomHalf
+        ? (schGame2?.awayPitcher || schGame2?.awayStarter || '')
+        : (schGame2?.homePitcher || schGame2?.homeStarter || '');
+      gs._pitcherName = rawP || schP;
+    }
+
+    // 타자: 공격팀 현재 타자
+    if (!gs._batterName) {
+      const rawB = gs.batterName || gs.currentBatterName || gs.batter || '';
+      gs._batterName = rawB;
     }
   }
 
@@ -3465,15 +3503,26 @@ window.openRelay = async function(gameId, away, home, inn) {
 
   if (data) {
     _relayData = data;
+    // 중계 데이터에서 현재 투수 정보 SCH에 반영
+    const _idx3 = SCH.findIndex(s => String(s.gameId) === String(gameId));
+    if (_idx3 !== -1) {
+      const _gs3 = data.currentGameState;
+      if (_gs3?.pitcherName || _gs3?.currentPitcherName) {
+        const _pName = _gs3.pitcherName || _gs3.currentPitcherName;
+        const _infoS = data.inningInfo || '';
+        if (_infoS.includes('말')) SCH[_idx3].awayPitcher = _pName;
+        else SCH[_idx3].homePitcher = _pName;
+      }
+    }
   } else {
     const body = document.getElementById('relay-body');
     if (body) body.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(0,0,0,0.35)">중계 데이터를 불러올 수 없습니다.</div>';
   }
   if (luData) {
-    const idx3 = SCH.findIndex(s => String(s.gameId) === String(gameId));
-    if (idx3 !== -1) {
-      if (luData.home || luData.away) SCH[idx3].lineup = luData;
-      if (luData.currentGameState) SCH[idx3].currentGameState = luData.currentGameState;
+    const _idx3b = SCH.findIndex(s => String(s.gameId) === String(gameId));
+    if (_idx3b !== -1) {
+      if (luData.home || luData.away) SCH[_idx3b].lineup = luData;
+      if (luData.currentGameState) SCH[_idx3b].currentGameState = luData.currentGameState;
     }
   }
   if (data || luData) updateRelayUI();
