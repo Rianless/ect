@@ -144,9 +144,21 @@ export default async function handler(req, res) {
         base1:  bestGs.base1  ?? bestGs.runner1      ?? 0,
         base2:  bestGs.base2  ?? bestGs.runner2      ?? 0,
         base3:  bestGs.base3  ?? bestGs.runner3      ?? 0,
-        // 투수/타자 이름 정규화 (숫자 ID는 이름으로 사용하지 않음)
-        pitcherName: [bestGs.pitcherName, bestGs.currentPitcherName].find(v => v && !/^\d+$/.test(String(v))) || '',
-        batterName:  [bestGs.batterName,  bestGs.currentBatterName ].find(v => v && !/^\d+$/.test(String(v))) || '',
+        // 투수/타자 이름 정규화 (숫자 ID는 pcode맵으로 이름 변환)
+        pitcherName: (()=>{
+          const m2 = {};
+          const lu2 = detail?.textRelayData || detail;
+          [...(lu2?.homeLineup?.batter||[]),...(lu2?.homeLineup?.pitcher||[]),...(lu2?.awayLineup?.batter||[]),...(lu2?.awayLineup?.pitcher||[])].forEach(p=>{if(p.pcode)m2[String(p.pcode)]=p.name||p.playerName||'';});
+          return [bestGs.pitcherName, bestGs.currentPitcherName].find(v=>v&&!/^\d+$/.test(String(v)))
+            || m2[String(bestGs.pitcher||'')] || '';
+        })(),
+        batterName: (()=>{
+          const m3 = {};
+          const lu3 = detail?.textRelayData || detail;
+          [...(lu3?.homeLineup?.batter||[]),...(lu3?.homeLineup?.pitcher||[]),...(lu3?.awayLineup?.batter||[]),...(lu3?.awayLineup?.pitcher||[])].forEach(p=>{if(p.pcode)m3[String(p.pcode)]=p.name||p.playerName||'';});
+          return [bestGs.batterName, bestGs.currentBatterName].find(v=>v&&!/^\d+$/.test(String(v)))
+            || m3[String(bestGs.batter||'')] || '';
+        })(),
       };
     }
 
@@ -243,13 +255,33 @@ export default async function handler(req, res) {
       const homeLineup = td.homeLineup || detail.homeLineup || null;
       const awayLineup = td.awayLineup || detail.awayLineup || null;
       let gs = td.currentGameState || detail.currentGameState || null;
-      // currentGameState의 pitcherName/batterName에서 숫자 ID 필터링
+
+      // pcode → 이름 맵 구성 (lineup 배열에서 pcode 추출)
+      const pcodeMap = {};
+      const allPlayers = [
+        ...(homeLineup?.batter || []), ...(homeLineup?.pitcher || []),
+        ...(awayLineup?.batter || []), ...(awayLineup?.pitcher || []),
+      ];
+      allPlayers.forEach(p => { if (p.pcode) pcodeMap[String(p.pcode)] = p.name || p.playerName || ''; });
+
+      // currentGameState의 pitcher/batter ID를 이름으로 변환
       if (gs) {
         const isNumId = v => v && /^\d+$/.test(String(v));
+        const resolveName = (nameField, idField) => {
+          // 이름 필드가 이미 문자열이면 그대로 사용
+          if (nameField && !isNumId(nameField)) return nameField;
+          // ID 필드로 pcodeMap 조회
+          if (idField) {
+            const mapped = pcodeMap[String(idField)];
+            if (mapped) return mapped;
+          }
+          // 이름 필드가 숫자 ID면 비움
+          return '';
+        };
         gs = {
           ...gs,
-          pitcherName: isNumId(gs.pitcherName) ? '' : (gs.pitcherName || ''),
-          batterName:  isNumId(gs.batterName)  ? '' : (gs.batterName  || ''),
+          pitcherName: resolveName(gs.pitcherName, gs.pitcher),
+          batterName:  resolveName(gs.batterName,  gs.batter),
         };
       }
       // 응답: 표준화된 구조
@@ -257,6 +289,7 @@ export default async function handler(req, res) {
         homeLineup,
         awayLineup,
         currentGameState: gs,
+        pcodeMap,
         _raw_keys: Object.keys(td).slice(0, 20),
       });
     }
