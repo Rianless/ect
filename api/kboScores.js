@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   const yyyy = kst.getUTCFullYear();
   const mm = pad(kst.getUTCMonth() + 1);
   const dd = pad(kst.getUTCDate());
-  
+
   const todayDash = isRequestedDate ? requestedDate : `${yyyy}-${mm}-${dd}`;
   const todayStr  = todayDash.replace(/-/g, '');
 
@@ -27,7 +27,6 @@ export default async function handler(req, res) {
     'Origin': 'https://m.sports.naver.com',
   };
 
-  // Helper function to recursively find textRelays
   function findTextRelaysRecursive(obj) {
     if (!obj || typeof obj !== 'object') return null;
     if (Array.isArray(obj)) {
@@ -54,10 +53,8 @@ export default async function handler(req, res) {
 
   async function fetchGameDetail(gameId, inning) {
     const inn = inning || 1;
-    // 종료된 경기는 text-relay 엔드포인트가 더 정확함
     const url1 = `https://api-gw.sports.naver.com/schedule/games/${gameId}/text-relay?inning=${inn}&isHighlight=false`;
     const url2 = `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`;
-    
     try {
       const r1 = await fetch(url1, { headers: HEADERS });
       if (r1.ok) {
@@ -70,7 +67,24 @@ export default async function handler(req, res) {
         return d2?.result || null;
       }
       return null;
-    } catch { return null; }
+    } catch(e) { return null; }
+  }
+
+  async function fetchLineup(gameId, inning) {
+    const inn = inning || 1;
+    const urls = [
+      `https://api-gw.sports.naver.com/schedule/games/${gameId}/lineup`,
+      `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`,
+    ];
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { headers: HEADERS });
+        if (!r.ok) continue;
+        const data = await r.json();
+        if (data?.result) return data.result;
+      } catch(e) {}
+    }
+    return null;
   }
 
   function convertGame(g, detail) {
@@ -105,17 +119,31 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rawGames = await fetchSchedule(todayDash);
     const gameId = req.query.gameId;
     const inning = req.query.inning ? parseInt(req.query.inning) : null;
+    const action = req.query.action || '';
 
+    // 라인업 전용: ?gameId=XXX&action=lineup
+    if (gameId && action === 'lineup') {
+      const result = await fetchLineup(gameId, inning);
+      if (!result) return res.status(404).json({ error: 'Lineup not found' });
+      return res.status(200).json(result);
+    }
+
+    // 중계 데이터: ?gameId=XXX&inning=N
+    // gameId 앞 8자리에서 날짜 자동 추출 (예: 20260329HTSK02026)
     if (gameId) {
+      const m = String(gameId).match(/^(\d{4})(\d{2})(\d{2})/);
+      const gameDateDash = m ? `${m[1]}-${m[2]}-${m[3]}` : todayDash;
+      const rawGames = await fetchSchedule(gameDateDash);
       const g = rawGames.find(x => String(x.gameId) === String(gameId));
       if (!g) return res.status(404).json({ error: 'Game not found' });
-      const detail = await fetchGameDetail(gameId, inning || (g.statusCode==='RESULT'?9:1));
+      const detail = await fetchGameDetail(gameId, inning || (g.statusCode==='RESULT' ? 9 : 1));
       return res.status(200).json(convertGame(g, detail));
     }
 
+    // 전체 일정
+    const rawGames = await fetchSchedule(todayDash);
     const allGames = rawGames.map(g => convertGame(g, null));
     return res.status(200).json({ games: allGames, date: todayStr });
   } catch(e) {
