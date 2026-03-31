@@ -2941,8 +2941,6 @@ const _initFetch = fetchTodayScores();
 setInterval(fetchTodayScores, 30000);
 
 // ── 중계 전체화면 ──
-let _relayGameId = null, _relayAway = '', _relayHome = '', _relayInn = 1;
-let _relayData = null, _relayInterval = null;
 
 async function fetchRelayData(gameId, inn) {
   try {
@@ -3226,4 +3224,3 @@ _initFetch.then(() => render()).catch(() => {});
 </div>
 </body>
 </html>
-
