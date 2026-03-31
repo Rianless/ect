@@ -119,38 +119,53 @@ export default async function handler(req, res) {
     }));
 
     // 선발투수: 네이버 lineup API 응답의 다양한 경로 커버
-    function extractStarter(side) {
-      // lineup API: detail.pitchers.awaySummary / homeSummary
-      const summary = detail?.[`${side}Summary`];
+    function extractStarterFromDetail(side) {
+      if (!detail) return null;
+
+      // 구조 1: detail.{side}Summary.pitcherName
+      const summary = detail[`${side}Summary`];
       if (summary?.pitcherName) return summary.pitcherName;
       if (summary?.name) return summary.name;
 
-      // lineup API: detail.pitchers 배열
-      const pitchers = detail?.pitchers;
+      // 구조 2: detail.pitchers 배열에서 starter
+      const pitchers = detail.pitchers;
       if (Array.isArray(pitchers)) {
-        const p = pitchers.find(p => p.side === side && (p.type === 'starter' || p.orderNum === 1 || p.pos === '선발'));
+        const p = pitchers.find(p =>
+          (p.side === side || p.teamSide === side) &&
+          (p.type === 'starter' || p.orderNum === 1 || p.startYn === 'Y')
+        );
         if (p?.name) return p.name;
+        if (p?.pitcherName) return p.pitcherName;
       }
 
-      // lineup API: detail.awayStarters / homeStarters 배열
-      const starters = detail?.[`${side}Starters`];
-      if (Array.isArray(starters) && starters[0]?.name) return starters[0].name;
-      if (Array.isArray(starters) && starters[0]?.pitcherName) return starters[0].pitcherName;
+      // 구조 3: detail.{side}Starters 배열
+      const starters = detail[`${side}Starters`];
+      if (Array.isArray(starters) && starters.length) {
+        return starters[0]?.name || starters[0]?.pitcherName || null;
+      }
 
-      // lineup API: game-polling 구조
-      const gd = detail?.game;
+      // 구조 4: detail.{side}Lineup.pitcher 배열 첫 번째
+      const lineup = detail[`${side}Lineup`] || detail[`${side}TeamLineup`];
+      if (lineup?.pitcher) {
+        const arr = Array.isArray(lineup.pitcher) ? lineup.pitcher : [lineup.pitcher];
+        const sp = arr.find(p => p.startYn === 'Y' || p.orderNum === 1 || p.type === 'starter');
+        if (sp?.name) return sp.name;
+        if (arr[0]?.name) return arr[0].name;
+      }
+
+      // 구조 5: game-polling 스타일
+      const gd = detail.game || {};
       if (side === 'away') {
-        return g.awayStarterName || g.awayStarter || g.awayStarterPitcherName ||
-               gd?.awayStarterName || gd?.awayStarter ||
-               detail?.awayStarterName || detail?.awayStarter || null;
+        return gd.awayStarterName || gd.awayStarter ||
+               g.awayStarterName || g.awayStarter || g.awayStarterPitcherName || null;
       } else {
-        return g.homeStarterName || g.homeStarter || g.homeStarterPitcherName ||
-               gd?.homeStarterName || gd?.homeStarter ||
-               detail?.homeStarterName || detail?.homeStarter || null;
+        return gd.homeStarterName || gd.homeStarter ||
+               g.homeStarterName || g.homeStarter || g.homeStarterPitcherName || null;
       }
     }
-    const awayStarter = extractStarter('away');
-    const homeStarter = extractStarter('home');
+
+    const awayStarter = extractStarterFromDetail('away');
+    const homeStarter = extractStarterFromDetail('home');
 
     return {
       gameId: String(g.gameId || ""),
