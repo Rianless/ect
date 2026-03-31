@@ -2082,11 +2082,21 @@ function renderModal(d) {
                 <div style="font-size:9px;font-weight:700;color:${awayResColor};margin-bottom:3px">${awayResLabel}</div>
                 <div style="font-size:15px;font-weight:900;color:${d.text}">${awayResName}</div>
               </div>`:''}
-              <div style="border-top:1px solid ${d.bgB};padding-top:8px">
-                <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
-                <div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
-                ${(!isSch&&g.awayPitcher&&g.awayPitcher!==g.awayStarter)?`<div style="font-size:10px;color:${d.sub};margin-top:4px">${isLive?'현재':'최종'} <span style="font-weight:700;color:${(T[g.away]||{}).color||'#888'}">${g.awayPitcher}</span></div>`:''}
-              </div>
+              ${(()=>{
+                // away 현재/최종 투수: awayPitcher 없으면 cgs와 lineup에서 보완
+                const _cgs_a = g.currentGameState;
+                const _isNum_a = v => v && /^\d+$/.test(String(v));
+                // 말이면 away가 수비 → away투수 표시
+                const _isBottom_a = (g.inningInfo||'').includes('말');
+                let _awayP = g.awayPitcher || '';
+                if (!_awayP && _isBottom_a && _cgs_a?.pitcherName && !_isNum_a(_cgs_a.pitcherName)) _awayP = _cgs_a.pitcherName;
+                if (!_awayP) { const _apl = g.lineup?.away?.pitchers||[]; if (_apl.length) _awayP = _apl[_apl.length-1]?.name||''; }
+                return `<div style="border-top:1px solid ${d.bgB};padding-top:8px">
+                  <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
+                  <div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
+                  ${(!isSch&&_awayP&&_awayP!==g.awayStarter)?`<div style="font-size:10px;color:${d.sub};margin-top:4px">${isLive?'현재':'최종'} <span style="font-weight:700;color:${(T[g.away]||{}).color||'#888'}">${_awayP}</span></div>`:''}
+                </div>`;
+              })()}
             </div>`;
           })()}
           ${(()=>{
@@ -2105,11 +2115,21 @@ function renderModal(d) {
                 <div style="font-size:9px;font-weight:700;color:${homeResColor};margin-bottom:3px">${homeResLabel}</div>
                 <div style="font-size:15px;font-weight:900;color:${d.text}">${homeResName}</div>
               </div>`:''}
-              <div style="border-top:1px solid ${d.bgB};padding-top:8px">
-                <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
-                <div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
-                ${(!isSch&&g.homePitcher&&g.homePitcher!==g.homeStarter)?`<div style="font-size:10px;color:${d.sub};margin-top:4px">${isLive?'현재':'최종'} <span style="font-weight:700;color:${(T[g.home]||{}).color||'#888'}">${g.homePitcher}</span></div>`:''}
-              </div>
+              ${(()=>{
+                // home 현재/최종 투수: homePitcher 없으면 cgs와 lineup에서 보완
+                const _cgs_h = g.currentGameState;
+                const _isNum_h = v => v && /^\d+$/.test(String(v));
+                // 초이면 home가 수비 → home투수 표시
+                const _isTop_h = !(g.inningInfo||'').includes('말');
+                let _homeP = g.homePitcher || '';
+                if (!_homeP && _isTop_h && _cgs_h?.pitcherName && !_isNum_h(_cgs_h.pitcherName)) _homeP = _cgs_h.pitcherName;
+                if (!_homeP) { const _hpl = g.lineup?.home?.pitchers||[]; if (_hpl.length) _homeP = _hpl[_hpl.length-1]?.name||''; }
+                return `<div style="border-top:1px solid ${d.bgB};padding-top:8px">
+                  <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
+                  <div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
+                  ${(!isSch&&_homeP&&_homeP!==g.homeStarter)?`<div style="font-size:10px;color:${d.sub};margin-top:4px">${isLive?'현재':'최종'} <span style="font-weight:700;color:${(T[g.home]||{}).color||'#888'}">${_homeP}</span></div>`:''}
+                </div>`;
+              })()}
             </div>`;
           })()}
         </div>
@@ -2164,8 +2184,29 @@ function renderModal(d) {
             const cgs = g.currentGameState;
             // 숫자(ID)인 경우 이름으로 사용하지 않도록 필터링
             const _isNumId = v => v && /^\d+$/.test(String(v));
-            const batterNameCgs = (!_isNumId(cgs?.batterName) && cgs?.batterName) || cgs?.batter?.name || '';
-            const pitcherNameCgs = (!_isNumId(cgs?.pitcherName) && cgs?.pitcherName) || (!_isNumId(cgs?.pitcher) && cgs?.pitcher) || cgs?.pitcher?.name || (defIsHome ? (g.homePitcher||g.homeStarter||'') : (g.awayPitcher||g.awayStarter||'')) || '';
+            // 투수: cgs 직접 이름 → lineup 마지막 투수 → SCH awayPitcher/homePitcher → 선발
+            const defPitchersModal = defIsHome
+              ? (g.lineup?.home?.pitchers || [])
+              : (g.lineup?.away?.pitchers || []);
+            const lineupLastP = defPitchersModal.length ? defPitchersModal[defPitchersModal.length - 1]?.name || '' : '';
+            const pitcherNameCgs = (!_isNumId(cgs?.pitcherName) && cgs?.pitcherName)
+              || (!_isNumId(cgs?.pitcher) && cgs?.pitcher)
+              || cgs?.pitcher?.name
+              || lineupLastP
+              || (defIsHome ? (g.homePitcher||g.homeStarter||'') : (g.awayPitcher||g.awayStarter||''))
+              || '';
+            // 타자: cgs 직접 이름 → lineup 배팅순서로 보완
+            const atkBattersModal = defIsHome
+              ? (g.lineup?.away?.batters || [])
+              : (g.lineup?.home?.batters || []);
+            let batterNameCgs = (!_isNumId(cgs?.batterName) && cgs?.batterName) || cgs?.batter?.name || '';
+            if (!batterNameCgs && cgs?.batter) {
+              const bOrd = Number(cgs.batter);
+              if (bOrd >= 1 && bOrd <= 9) {
+                const bP = atkBattersModal.find(p => p.order === bOrd || p.n === bOrd);
+                if (bP?.name) batterNameCgs = bP.name;
+              }
+            }
             const base1Runner = cgs?.base1Name || cgs?.base1Runner?.name || (base1?'주자':'');
             const base2Runner = cgs?.base2Name || cgs?.base2Runner?.name || (base2?'주자':'');
             const base3Runner = cgs?.base3Name || cgs?.base3Runner?.name || (base3?'주자':'');
@@ -2673,7 +2714,24 @@ window.refreshModalSituation = async function(gameId, date, away, home) {
     if (idx2 !== -1) {
       if (lineupData) {
         if (lineupData.home || lineupData.away) SCH[idx2].lineup = lineupData;
-        if (lineupData.currentGameState) SCH[idx2].currentGameState = lineupData.currentGameState;
+        if (lineupData.currentGameState) {
+          SCH[idx2].currentGameState = lineupData.currentGameState;
+          const _rmGs = lineupData.currentGameState;
+          const _rmPName = _rmGs?.pitcherName || '';
+          if (_rmPName && !/^\d+$/.test(_rmPName)) {
+            const _rmInfo = _rmGs?._inningInfo || SCH[idx2].inningInfo || '';
+            if (_rmInfo.includes('말')) { if (!SCH[idx2].awayPitcher) SCH[idx2].awayPitcher = _rmPName; }
+            else { if (!SCH[idx2].homePitcher) SCH[idx2].homePitcher = _rmPName; }
+          }
+        }
+        if (!SCH[idx2].awayPitcher) {
+          const _rmapl = lineupData.away?.pitchers || [];
+          if (_rmapl.length) SCH[idx2].awayPitcher = _rmapl[_rmapl.length-1].name || '';
+        }
+        if (!SCH[idx2].homePitcher) {
+          const _rmhpl = lineupData.home?.pitchers || [];
+          if (_rmhpl.length) SCH[idx2].homePitcher = _rmhpl[_rmhpl.length-1].name || '';
+        }
       }
       state.modalGame = SCH[idx2];
     }
@@ -2704,7 +2762,26 @@ function openModal(idx,date) {
       const idx2 = SCH.findIndex(s=>s.date===g.date&&s.away===g.away&&s.home===g.home);
       if (idx2 !== -1) {
         if (lineup.home || lineup.away) SCH[idx2].lineup = lineup;
-        if (lineup.currentGameState) SCH[idx2].currentGameState = lineup.currentGameState;
+        if (lineup.currentGameState) {
+          SCH[idx2].currentGameState = lineup.currentGameState;
+          // currentGameState의 pitcherName으로 awayPitcher/homePitcher 보완
+          const _omGs = lineup.currentGameState;
+          const _omPName = _omGs?.pitcherName || '';
+          if (_omPName && !/^\d+$/.test(_omPName)) {
+            const _omInfo = _omGs?._inningInfo || SCH[idx2].inningInfo || '';
+            if (_omInfo.includes('말')) { if (!SCH[idx2].awayPitcher) SCH[idx2].awayPitcher = _omPName; }
+            else { if (!SCH[idx2].homePitcher) SCH[idx2].homePitcher = _omPName; }
+          }
+        }
+        // lineup의 마지막 투수로도 보완
+        if (!SCH[idx2].awayPitcher) {
+          const _apl2 = lineup.away?.pitchers || [];
+          if (_apl2.length) SCH[idx2].awayPitcher = _apl2[_apl2.length-1].name || '';
+        }
+        if (!SCH[idx2].homePitcher) {
+          const _hpl2 = lineup.home?.pitchers || [];
+          if (_hpl2.length) SCH[idx2].homePitcher = _hpl2[_hpl2.length-1].name || '';
+        }
       }
       if (state.modalGame?.gameId === g.gameId) {
         state.modalGame = idx2 !== -1 ? SCH[idx2] : state.modalGame;
@@ -2994,8 +3071,12 @@ function convertBrowserGame(game, detail) {
     losePitcher: gameData.losePitcherName || game.losePitcherName || null,
     awayStarter: game.awayStarterName || game.awayStarter || gameData.awayStarterName || gameData.awayStarter || null,
     homeStarter: game.homeStarterName || game.homeStarter || gameData.homeStarterName || gameData.homeStarter || null,
-    awayPitcher: gameData.awayCurrentPitcherName || game.awayCurrentPitcherName || null,
-    homePitcher: gameData.homeCurrentPitcherName || game.homeCurrentPitcherName || null,
+    awayPitcher: gameData.awayCurrentPitcherName || game.awayCurrentPitcherName
+      || gameData.awayPitcherName || game.awayPitcherName
+      || detail?.textRelayData?.awayCurrentPitcherName || null,
+    homePitcher: gameData.homeCurrentPitcherName || game.homeCurrentPitcherName
+      || gameData.homePitcherName || game.homePitcherName
+      || detail?.textRelayData?.homeCurrentPitcherName || null,
     awayHit: Number(gameData.awayTeamHit ?? game.awayTeamHit ?? gameData.awayHit ?? game.awayHit ?? 0),
     homeHit: Number(gameData.homeTeamHit ?? game.homeTeamHit ?? gameData.homeHit ?? game.homeHit ?? 0),
     awayError: Number(gameData.awayTeamError ?? game.awayTeamError ?? gameData.awayError ?? game.awayError ?? 0),
@@ -3114,6 +3195,14 @@ async function fetchTodayScores(targetDate='') {
       }
       if (g.gameId) upd.gameId = g.gameId;
       if (g.broadChannel) upd.broadChannel = g.broadChannel;
+      // currentGameState의 pitcherName으로 awayPitcher/homePitcher 보완
+      // (API가 awayCurrentPitcherName/homeCurrentPitcherName을 안 주는 경우 대비)
+      if (!upd.awayPitcher && !upd.homePitcher && upd.currentGameState?.pitcherName) {
+        const cPName = upd.currentGameState.pitcherName;
+        const cInfo  = upd.currentGameState._inningInfo || g.inningInfo || '';
+        if (cInfo.includes('말')) upd.awayPitcher = cPName;
+        else upd.homePitcher = cPName;
+      }
       Object.assign(SCH[idx], upd);
       // FINAL이거나 시간이 변경된 경우 localStorage에 영구 저장
       if (g.status === 'FINAL' || (g.time && g.time !== SCH[idx]._origTime)) {
@@ -3392,22 +3481,48 @@ function updateRelayUI() {
 
     // 투수: 수비팀 현재 투수
     if (!gs._pitcherName) {
-      // currentGameState에서 직접 (pitcher, pitcherName, currentPitcher 등)
-      // 숫자(ID)인 경우 이름으로 사용하지 않음
       const isNumeric = v => /^\d+$/.test(String(v||''));
+      // 1) currentGameState에서 직접 이름 필드 확인
       const rawP = [gs.pitcherName, gs.currentPitcherName, gs.pitcher].find(v => v && !isNumeric(v)) || '';
-      // SCH에서 현재 투수 (말이면 away 투수, 초이면 home 투수)
+      // 2) lineup에서 현재 투수 추출 (seqno 마지막 = 현재 등판 투수)
+      const relayLu2 = schGame2?.lineup;
+      const defPitchers2 = isBottomHalf
+        ? (relayLu2?.away?.pitchers || [])
+        : (relayLu2?.home?.pitchers || []);
+      const lineupP = defPitchers2.length ? defPitchers2[defPitchers2.length - 1]?.name || '' : '';
+      // 3) SCH에서 현재 투수 (awayPitcher/homePitcher)
       const schP = isBottomHalf
         ? (schGame2?.awayPitcher || schGame2?.awayStarter || '')
         : (schGame2?.homePitcher || schGame2?.homeStarter || '');
-      gs._pitcherName = rawP || schP;
+      gs._pitcherName = rawP || lineupP || schP;
     }
 
     // 타자: 공격팀 현재 타자
     if (!gs._batterName) {
       const isNumeric2 = v => /^\d+$/.test(String(v||''));
-      const rawB = [gs.batterName, gs.currentBatterName, gs.batter].find(v => v && !isNumeric2(v)) || '';
-      gs._batterName = rawB;
+      // 1) currentGameState에서 직접 이름 필드
+      const rawB = [gs.batterName, gs.currentBatterName].find(v => v && !isNumeric2(v)) || '';
+      // 2) gs.batter가 숫자 ID일 때 lineup pcodeMap으로 변환
+      let batterFromLineup = '';
+      if (!rawB && gs.batter) {
+        const relayLu3 = schGame2?.lineup;
+        const atkBatters3 = isBottomHalf
+          ? (relayLu3?.home?.batters || [])
+          : (relayLu3?.away?.batters || []);
+        // pcode 기반 매핑 시도
+        const pcMap3 = {};
+        const atkPitchers3 = isBottomHalf
+          ? (relayLu3?.home?.pitchers || [])
+          : (relayLu3?.away?.pitchers || []);
+        // lineup에서 pcode 매핑이 없으면 👉 현재 타자는 공격팀 라인업에서 배팅 순서로 추정
+        // gs.batter가 배팅 순서(1~9)에 해당하면 해당 선수 이름 사용
+        const bOrder = Number(gs.batter);
+        if (bOrder >= 1 && bOrder <= 9) {
+          const bPlayer = atkBatters3.find(p => p.order === bOrder || p.n === bOrder);
+          if (bPlayer?.name) batterFromLineup = bPlayer.name;
+        }
+      }
+      gs._batterName = rawB || batterFromLineup;
     }
   }
 
@@ -3553,7 +3668,17 @@ window.openRelay = async function(gameId, away, home, inn) {
     const _idx3b = SCH.findIndex(s => String(s.gameId) === String(gameId));
     if (_idx3b !== -1) {
       if (luData.home || luData.away) SCH[_idx3b].lineup = luData;
-      if (luData.currentGameState) SCH[_idx3b].currentGameState = luData.currentGameState;
+      if (luData.currentGameState) {
+        SCH[_idx3b].currentGameState = luData.currentGameState;
+        // lineup fetch에서 얻은 currentGameState의 pitcherName으로 awayPitcher/homePitcher 보완
+        const _luGs = luData.currentGameState;
+        const _luPName = _luGs?.pitcherName || _luGs?.currentPitcherName || '';
+        if (_luPName && !/^\d+$/.test(_luPName)) {
+          const _luInfo = _luGs?._inningInfo || SCH[_idx3b].inningInfo || '';
+          if (_luInfo.includes('말')) { if (!SCH[_idx3b].awayPitcher) SCH[_idx3b].awayPitcher = _luPName; }
+          else { if (!SCH[_idx3b].homePitcher) SCH[_idx3b].homePitcher = _luPName; }
+        }
+      }
     }
   }
   if (data || luData) updateRelayUI();
