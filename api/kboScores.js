@@ -37,6 +37,17 @@ export default async function handler(req, res) {
     return (data?.result?.games || []).filter(g => g.categoryId === 'kbo');
   }
 
+  async function fetchTextRelay(gameId, inning) {
+    const inn = inning || 1;
+    const url = `https://api-gw.sports.naver.com/schedule/games/${gameId}/text-relay?inning=${inn}&isHighlight=false`;
+    try {
+      const r = await fetch(url, { headers: HEADERS });
+      if (!r.ok) return null;
+      const data = await r.json();
+      return data?.result || null;
+    } catch { return null; }
+  }
+
   async function fetchGameDetail(gameId, inning) {
     const inn = inning || 1;
     const url = `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`;
@@ -222,7 +233,13 @@ export default async function handler(req, res) {
           const m = g.statusInfo.match(/(\d+)회/);
           if (m) inn = parseInt(m[1]);
         }
-        const detail = await fetchGameDetail(g.gameId, inn);
+        let detail = null;
+        if (g.statusCode === 'RESULT') {
+          detail = await fetchTextRelay(g.gameId, inn);
+        }
+        if (!detail) {
+          detail = await fetchGameDetail(g.gameId, inn);
+        }
         if (detail) detailMap[g.gameId] = detail;
       })
     );
