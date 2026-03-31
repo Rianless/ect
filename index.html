@@ -2086,12 +2086,12 @@ function renderModal(d) {
                 // away 현재/최종 투수: awayPitcher 없으면 cgs와 lineup에서 보완
                 const _cgs_a = g.currentGameState;
                 const _isNum_a = v => v && /^\d+$/.test(String(v));
-                // 말이면 away가 수비 → away투수 표시 (초이면 away는 공격 중이므로 lineup 폴백 안 함)
+                // 말이면 away가 수비 → cgs.pitcherName으로 보완 (초이면 cgs는 상대 팀 투수이므로 사용 안 함)
                 const _isBottom_a = (g.inningInfo||'').includes('말');
                 let _awayP = g.awayPitcher || '';
                 if (!_awayP && _isBottom_a && _cgs_a?.pitcherName && !_isNum_a(_cgs_a.pitcherName)) _awayP = _cgs_a.pitcherName;
-                // lineup 폴백: 말(away 수비)이거나 경기 종료 시에만 적용
-                if (!_awayP && (_isBottom_a || isFinal)) { const _apl = g.lineup?.away?.pitchers||[]; if (_apl.length) _awayP = _apl[_apl.length-1]?.name||''; }
+                // lineup 폴백: 해당 팀의 마지막 등판 투수 (이닝 구분 없이 항상 적용)
+                if (!_awayP) { const _apl = g.lineup?.away?.pitchers||[]; if (_apl.length) _awayP = _apl[_apl.length-1]?.name||''; }
                 return `<div style="border-top:1px solid ${d.bgB};padding-top:8px">
                   <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
                   <div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
@@ -2120,12 +2120,12 @@ function renderModal(d) {
                 // home 현재/최종 투수: homePitcher 없으면 cgs와 lineup에서 보완
                 const _cgs_h = g.currentGameState;
                 const _isNum_h = v => v && /^\d+$/.test(String(v));
-                // 초이면 home가 수비 → home투수 표시 (말이면 home은 공격 중이므로 lineup 폴백 안 함)
+                // 초이면 home가 수비 → cgs.pitcherName으로 보완 (말이면 cgs는 상대 팀 투수이므로 사용 안 함)
                 const _isTop_h = !(g.inningInfo||'').includes('말');
                 let _homeP = g.homePitcher || '';
                 if (!_homeP && _isTop_h && _cgs_h?.pitcherName && !_isNum_h(_cgs_h.pitcherName)) _homeP = _cgs_h.pitcherName;
-                // lineup 폴백: 초(home 수비)이거나 경기 종료 시에만 적용
-                if (!_homeP && (_isTop_h || isFinal)) { const _hpl = g.lineup?.home?.pitchers||[]; if (_hpl.length) _homeP = _hpl[_hpl.length-1]?.name||''; }
+                // lineup 폴백: 해당 팀의 마지막 등판 투수 (이닝 구분 없이 항상 적용)
+                if (!_homeP) { const _hpl = g.lineup?.home?.pitchers||[]; if (_hpl.length) _homeP = _hpl[_hpl.length-1]?.name||''; }
                 return `<div style="border-top:1px solid ${d.bgB};padding-top:8px">
                   <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
                   <div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
@@ -2728,15 +2728,12 @@ window.refreshModalSituation = async function(gameId, date, away, home) {
             else { if (!SCH[idx2].homePitcher) SCH[idx2].homePitcher = _rmPName; }
           }
         }
-        // lineup 마지막 투수 보완 (이닝 초/말 구분 적용)
-        const _rmInfo2 = lineupData.currentGameState?._inningInfo || SCH[idx2].inningInfo || '';
-        const _rmIsBottom = _rmInfo2.includes('말');
-        const _rmIsFinal = SCH[idx2].status === 'FINAL';
-        if (!SCH[idx2].awayPitcher && (_rmIsBottom || _rmIsFinal)) {
+        // lineup 마지막 투수 보완 (해당 팀의 마지막 등판 투수, 이닝 구분 없이 항상 적용)
+        if (!SCH[idx2].awayPitcher) {
           const _rmapl = lineupData.away?.pitchers || [];
           if (_rmapl.length) SCH[idx2].awayPitcher = _rmapl[_rmapl.length-1].name || '';
         }
-        if (!SCH[idx2].homePitcher && (!_rmIsBottom || _rmIsFinal)) {
+        if (!SCH[idx2].homePitcher) {
           const _rmhpl = lineupData.home?.pitchers || [];
           if (_rmhpl.length) SCH[idx2].homePitcher = _rmhpl[_rmhpl.length-1].name || '';
         }
@@ -2781,16 +2778,12 @@ function openModal(idx,date) {
             else { if (!SCH[idx2].homePitcher) SCH[idx2].homePitcher = _omPName; }
           }
         }
-        // lineup의 마지막 투수로도 보완 (이닝 초/말 구분 적용)
-        const _omInfo2 = lineup.currentGameState?._inningInfo || SCH[idx2].inningInfo || '';
-        const _omIsBottom = _omInfo2.includes('말');
-        const _omIsFinal = SCH[idx2].status === 'FINAL';
-        // 말이면 away가 수비 → away투수 보완, 초이면 home가 수비 → home투수 보완
-        if (!SCH[idx2].awayPitcher && (_omIsBottom || _omIsFinal)) {
+        // lineup의 마지막 투수로도 보완 (해당 팀의 마지막 등판 투수, 이닝 구분 없이 항상 적용)
+        if (!SCH[idx2].awayPitcher) {
           const _apl2 = lineup.away?.pitchers || [];
           if (_apl2.length) SCH[idx2].awayPitcher = _apl2[_apl2.length-1].name || '';
         }
-        if (!SCH[idx2].homePitcher && (!_omIsBottom || _omIsFinal)) {
+        if (!SCH[idx2].homePitcher) {
           const _hpl2 = lineup.home?.pitchers || [];
           if (_hpl2.length) SCH[idx2].homePitcher = _hpl2[_hpl2.length-1].name || '';
         }
