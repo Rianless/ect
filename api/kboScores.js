@@ -118,17 +118,39 @@ export default async function handler(req, res) {
       resultText: extractResult(item),
     }));
 
-    // 선발투수: 네이버 API의 다양한 필드명 커버 (schedule API baseball 필드 포함)
-    const awayStarter =
-      g.awayStarterName || g.awayStarter || g.awayStarterPitcherName ||
-      gameData.awayStarterName || gameData.awayStarter ||
-      detail?.awayStarterName || detail?.awayStarter ||
-      detail?.game?.awayStarterName || null;
-    const homeStarter =
-      g.homeStarterName || g.homeStarter || g.homeStarterPitcherName ||
-      gameData.homeStarterName || gameData.homeStarter ||
-      detail?.homeStarterName || detail?.homeStarter ||
-      detail?.game?.homeStarterName || null;
+    // 선발투수: 네이버 lineup API 응답의 다양한 경로 커버
+    function extractStarter(side) {
+      // lineup API: detail.pitchers.awaySummary / homeSummary
+      const summary = detail?.[`${side}Summary`];
+      if (summary?.pitcherName) return summary.pitcherName;
+      if (summary?.name) return summary.name;
+
+      // lineup API: detail.pitchers 배열
+      const pitchers = detail?.pitchers;
+      if (Array.isArray(pitchers)) {
+        const p = pitchers.find(p => p.side === side && (p.type === 'starter' || p.orderNum === 1 || p.pos === '선발'));
+        if (p?.name) return p.name;
+      }
+
+      // lineup API: detail.awayStarters / homeStarters 배열
+      const starters = detail?.[`${side}Starters`];
+      if (Array.isArray(starters) && starters[0]?.name) return starters[0].name;
+      if (Array.isArray(starters) && starters[0]?.pitcherName) return starters[0].pitcherName;
+
+      // lineup API: game-polling 구조
+      const gd = detail?.game;
+      if (side === 'away') {
+        return g.awayStarterName || g.awayStarter || g.awayStarterPitcherName ||
+               gd?.awayStarterName || gd?.awayStarter ||
+               detail?.awayStarterName || detail?.awayStarter || null;
+      } else {
+        return g.homeStarterName || g.homeStarter || g.homeStarterPitcherName ||
+               gd?.homeStarterName || gd?.homeStarter ||
+               detail?.homeStarterName || detail?.homeStarter || null;
+      }
+    }
+    const awayStarter = extractStarter('away');
+    const homeStarter = extractStarter('home');
 
     return {
       gameId: String(g.gameId || ""),
@@ -175,7 +197,14 @@ export default async function handler(req, res) {
     await Promise.all(rawGames.map(async g => {
       try {
         const lineupResult = await fetchLineup(g.gameId, 1);
-        if (lineupResult) detailMap[g.gameId] = lineupResult;
+        if (lineupResult) {
+          detailMap[g.gameId] = lineupResult;
+          // 디버그: 첫 번째 경기 lineup 응답 키 로깅
+          if (rawGames.indexOf(g) === 0) {
+            console.log('[DEBUG lineup keys]', Object.keys(lineupResult));
+            console.log('[DEBUG lineup sample]', JSON.stringify(lineupResult).slice(0, 500));
+          }
+        }
       } catch(e) {}
     }));
     const allGames = rawGames.map(g => convertGame(g, detailMap[g.gameId] || null));
