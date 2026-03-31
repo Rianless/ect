@@ -1398,26 +1398,19 @@ window.recDeletePhoto = function(date, away, home, idx) {
 window.recUploadPhoto = function(input, date, away, home) {
   if (!input.files || !input.files.length) return;
   const files = Array.from(input.files);
-  const oversized = files.filter(f => f.size > 5*1024*1024);
-  if(oversized.length > 0) { alert('사진 크기가 너무 커요. 5MB 이하를 선택해 주세요.'); return; }
-  let loaded = 0;
-  const results = new Array(files.length);
-  files.forEach(function(file, idx) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      results[idx] = e.target.result;
-      loaded++;
-      if(loaded === files.length) {
-        const data = _recGetMemo(date, away, home);
-        const existing = data.photos || (data.photo ? [data.photo] : []);
-        data.photos = [...existing, ...results];
-        delete data.photo;
-        _recSaveMemo(date, away, home, data);
-        render();
-        input.value = '';
-      }
-    };
-    reader.readAsDataURL(file);
+  _compressAll(files, function(results) {
+    const data = _recGetMemo(date, away, home);
+    const existing = data.photos || (data.photo ? [data.photo] : []);
+    data.photos = [...existing, ...results];
+    delete data.photo;
+    try {
+      _recSaveMemo(date, away, home, data);
+    } catch(e) {
+      alert('저장 공간이 부족해요. 사진을 줄이거나 일부를 삭제해 주세요.');
+      return;
+    }
+    render();
+    input.value = '';
   });
 };
 
@@ -2512,31 +2505,19 @@ function renderModal(d) {
   window.saveMemoPhoto = function(input) {
     if(!input||!input.files||!input.files.length) return;
     const files = Array.from(input.files);
-    // 파일 크기 제한 5MB
-    const oversized = files.filter(f => f.size > 5*1024*1024);
-    if(oversized.length > 0) {
-      alert('사진 크기가 너무 커요. 5MB 이하의 사진을 선택해 주세요.');
-      return;
-    }
-    let loaded = 0;
-    const results = new Array(files.length);
-    files.forEach((file, idx) => {
-      const reader = new FileReader();
-      reader.onload = e => {
-        results[idx] = e.target.result;
-        loaded++;
-        if(loaded === files.length) {
-          const data = getMemoData();
-          const existing = data.photos || (data.photo ? [data.photo] : []);
-          data.photos = [...existing, ...results];
-          delete data.photo; // 이전 단일 포맷 제거
-          saveMemoData(data);
-          _refreshMemoPhotoPreview(data.photos);
-          input.value = '';
-        }
-      };
-      reader.onerror = () => alert('사진을 불러오는 데 실패했어요.');
-      reader.readAsDataURL(file);
+    _compressAll(files, function(results) {
+      const data = getMemoData();
+      const existing = data.photos || (data.photo ? [data.photo] : []);
+      data.photos = [...existing, ...results];
+      delete data.photo;
+      try {
+        saveMemoData(data);
+      } catch(e) {
+        alert('저장 공간이 부족해요. 사진을 줄이거나 일부를 삭제해 주세요.');
+        return;
+      }
+      _refreshMemoPhotoPreview(data.photos);
+      input.value = '';
     });
   };
   window.deleteMemoPhoto = function(idx) {
@@ -4105,6 +4086,39 @@ document.addEventListener('keydown', function(e) {
 // 초기 render: 캐시 적용 후 즉시 실행, 스코어 fetch 완료 후 자동 재렌더링
 // ── 기록 탭 사진 슬라이드 터치 핸들러 ──
 // ── 기록 탭 사진 슬라이드 (show/hide 방식) ──
+// 이미지 압축 (base64 → canvas 리사이즈)
+function _compressImage(dataUrl, maxSize, quality, cb) {
+  const img = new Image();
+  img.onload = function() {
+    let w = img.width, h = img.height;
+    if(w > maxSize || h > maxSize) {
+      if(w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+      else { w = Math.round(w * maxSize / h); h = maxSize; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', quality));
+  };
+  img.src = dataUrl;
+}
+
+function _compressAll(files, cb) {
+  const results = new Array(files.length);
+  let done = 0;
+  files.forEach(function(file, idx) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      _compressImage(e.target.result, 1200, 0.75, function(compressed) {
+        results[idx] = compressed;
+        done++;
+        if(done === files.length) cb(results);
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // 슬라이드 현재 인덱스를 JS Map으로 관리 (DOM dataset 의존 제거)
 const _slideState = new Map();
 
