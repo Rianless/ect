@@ -1282,32 +1282,29 @@ function renderBaseballRecord(d) {
     });
     html += '</div>';
 
-    // 사진 슬라이드 (JS 터치 스와이프 방식)
+    // 사진 슬라이드 (show/hide 방식 - 너비 계산 불필요)
     const recPhotos = memoData.photos || (memoData.photo ? [memoData.photo] : []);
     if(recPhotos.length > 0) {
-      const recPJ = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
       const slideId = 'slide-'+memoId;
+      const pj = JSON.stringify(recPhotos).replace(/"/g,'&quot;');
       html += '<div class="rec-photo-wrap" style="margin-bottom:10px">';
-      html += '<div id="'+slideId+'" style="position:relative;overflow:hidden;border-radius:10px;touch-action:pan-y">';
-      html += '<div class="slide-track" style="display:flex;transition:transform 0.3s ease;will-change:transform">';
+      html += '<div id="'+slideId+'" data-cur="0" data-total="'+recPhotos.length+'" data-photos="'+pj+'" style="position:relative;border-radius:10px;overflow:hidden;touch-action:pan-y">';
       recPhotos.forEach(function(src, pi) {
-        html += '<div class="slide-item" style="flex:none;width:100%;position:relative">';
-        html += '<img src="'+src+'" onclick="event.stopPropagation();openPhotoViewer(JSON.parse(document.getElementById(\''+slideId+'\').dataset.photos),'+pi+')" '
+        html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+'">';
+        html += '<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(\''+slideId+'\')" '
           + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;background:#111;border-radius:10px"/>';
         html += '<button onclick="event.stopPropagation();recDeletePhoto(\''+safeD+'\',\''+safeA+'\',\''+safeH+'\','+pi+')" '
           + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
           + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>';
         html += '</div>';
       });
-      html += '</div>';
-      // 카운터
       if(recPhotos.length > 1) {
-        html += '<div class="slide-counter" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px;pointer-events:none">1/'+recPhotos.length+'</div>';
+        html += '<div class="sl-counter" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px;pointer-events:none">1/'+recPhotos.length+'</div>';
+        html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',-1)" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>';
+        html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>';
       }
-      html += '</div>'; // position:relative 끝
-      html += '</div>'; // rec-photo-wrap 끝
-      // data-photos는 slide-track div에 넣어서 openPhotoViewer에서 읽게
-      // 실제로는 slideId div에 넣는 방식으로 처리
+      html += '</div>';
+      html += '</div>';
     }
 
     // 텍스트 메모 textarea (oninput → 즉시 저장)
@@ -1419,28 +1416,27 @@ window.recUploadPhoto = function(input, date, away, home) {
 function _recRenderPhotos(container, photos, date, away, home) {
   if(!container) return;
   if(!photos || !photos.length) { container.innerHTML = ''; return; }
-  // slideId를 textarea의 memoId 기반으로 생성
   const memoId = 'rec-memo-'+date+'-'+away+'-'+home;
   const slideId = 'slide-'+memoId;
-  // 기존 슬라이드 wrap을 교체
-  let html = '<div id="'+slideId+'" style="position:relative;overflow:hidden;border-radius:10px;touch-action:pan-y">';
-  html += '<div class="slide-track" style="display:flex;transition:transform 0.3s ease;will-change:transform">';
+  const pj = JSON.stringify(photos).replace(/"/g,'&quot;');
+  let html = '<div id="'+slideId+'" data-cur="0" data-total="'+photos.length+'" data-photos="'+pj+'" style="position:relative;border-radius:10px;overflow:hidden;touch-action:pan-y">';
   photos.forEach(function(src, pi) {
-    html += '<div class="slide-item" style="flex:none;width:100%;position:relative">'
-      + '<img src="'+src+'" onclick="event.stopPropagation();openPhotoViewer(JSON.parse(document.getElementById(\''+slideId+'\').dataset.photos),'+pi+')" '
+    html += '<div class="sl-item" style="display:'+(pi===0?'block':'none')+'">'
+      + '<img src="'+src+'" onclick="event.stopPropagation();recOpenPhoto(\''+slideId+'\')" '
       + 'style="width:100%;height:auto;max-height:360px;object-fit:contain;display:block;cursor:zoom-in;background:#111;border-radius:10px"/>'
       + '<button onclick="event.stopPropagation();recDeletePhoto(\''+date+'\',\''+away+'\',\''+home+'\','+pi+')" '
       + 'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;'
       + 'width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1">✕</button>'
       + '</div>';
   });
-  html += '</div>';
   if(photos.length > 1) {
-    html += '<div class="slide-counter" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px;pointer-events:none">1/'+photos.length+'</div>';
+    html += '<div class="sl-counter" style="position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:3px 8px;pointer-events:none">1/'+photos.length+'</div>';
+    html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',-1)" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">‹</button>';
+    html += '<button onclick="event.stopPropagation();recSlide(\''+slideId+'\',1)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);color:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">›</button>';
   }
   html += '</div>';
   container.innerHTML = html;
-  setTimeout(_initRecSlides, 0);
+  _initSlideTouch(document.getElementById(slideId));
 }
 
 function renderMemos(d) {
@@ -3638,59 +3634,50 @@ document.addEventListener('keydown', function(e) {
 
 // 초기 render: 캐시 적용 후 즉시 실행, 스코어 fetch 완료 후 자동 재렌더링
 // ── 기록 탭 사진 슬라이드 터치 핸들러 ──
-function _initRecSlides() {
-  document.querySelectorAll('[id^="slide-"]').forEach(function(wrap) {
-    if (wrap.dataset.slideInit) return;
+// ── 기록 탭 사진 슬라이드 (show/hide 방식) ──
+window.recSlide = function(slideId, dir) {
+  const wrap = document.getElementById(slideId);
+  if (!wrap) return;
+  const items = wrap.querySelectorAll('.sl-item');
+  const total = items.length;
+  let cur = parseInt(wrap.dataset.cur) || 0;
+  items[cur].style.display = 'none';
+  cur = (cur + dir + total) % total;
+  items[cur].style.display = 'block';
+  wrap.dataset.cur = cur;
+  const counter = wrap.querySelector('.sl-counter');
+  if (counter) counter.textContent = (cur + 1) + '/' + total;
+};
 
-    const track = wrap.querySelector('.slide-track');
-    const items = wrap.querySelectorAll('.slide-item');
-    const counter = wrap.querySelector('.slide-counter');
-    const total = items.length;
-    if (!track || total < 2) return;
+window.recOpenPhoto = function(slideId) {
+  const wrap = document.getElementById(slideId);
+  if (!wrap) return;
+  const photos = JSON.parse(wrap.dataset.photos || '[]');
+  const cur = parseInt(wrap.dataset.cur) || 0;
+  openPhotoViewer(photos, cur);
+};
 
-    // 초기화는 실제 너비가 잡힌 후에만
-    function tryInit() {
-      const w = wrap.getBoundingClientRect().width;
-      if (!w) { requestAnimationFrame(tryInit); return; }
-
-      wrap.dataset.slideInit = '1';
-      let cur = 0;
-
-      const photos = Array.from(items).map(function(el) {
-        return el.querySelector('img').src;
-      });
-      wrap.dataset.photos = JSON.stringify(photos);
-
-      // 각 item 너비를 wrap 너비로 명시 고정
-      items.forEach(function(el) { el.style.width = w + 'px'; });
-
-      function goTo(idx) {
-        cur = Math.max(0, Math.min(total - 1, idx));
-        const iw = wrap.getBoundingClientRect().width || w;
-        track.style.transform = 'translateX(-' + (cur * iw) + 'px)';
-        if (counter) counter.textContent = (cur + 1) + '/' + total;
-      }
-
-      let tx = null;
-      wrap.addEventListener('touchstart', function(e) {
-        tx = e.touches[0].clientX;
-      }, { passive: true });
-      wrap.addEventListener('touchend', function(e) {
-        if (tx === null) return;
-        const dx = e.changedTouches[0].clientX - tx;
-        if (Math.abs(dx) > 40) goTo(dx < 0 ? cur + 1 : cur - 1);
-        tx = null;
-      }, { passive: true });
-
-      goTo(0);
-    }
-
-    requestAnimationFrame(function() { requestAnimationFrame(tryInit); });
-  });
+function _initSlideTouch(wrap) {
+  if (!wrap) return;
+  let tx = null;
+  wrap.addEventListener('touchstart', function(e) {
+    tx = e.touches[0].clientX;
+  }, { passive: true });
+  wrap.addEventListener('touchend', function(e) {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    tx = null;
+    if (Math.abs(dx) > 40) recSlide(wrap.id, dx < 0 ? 1 : -1);
+  }, { passive: true });
 }
 
 document.addEventListener('renderDone', function() {
-  requestAnimationFrame(function() { requestAnimationFrame(_initRecSlides); });
+  document.querySelectorAll('[id^="slide-"]').forEach(function(wrap) {
+    if (!wrap.dataset.touchInit) {
+      wrap.dataset.touchInit = '1';
+      _initSlideTouch(wrap);
+    }
+  });
 });
 
 render();
