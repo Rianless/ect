@@ -167,6 +167,13 @@ export default async function handler(req, res) {
     const awayStarter = extractStarterFromDetail('away');
     const homeStarter = extractStarterFromDetail('home');
 
+    // currentGameState에 inningInfo 주입 (프론트에서 초/말 판별용)
+    const rawGs = detail?.currentGameState || null;
+    const enrichedGs = rawGs ? {
+      ...rawGs,
+      _inningInfo: g.statusInfo || rawGs.inningDisplay || rawGs.inningText || '',
+    } : null;
+
     return {
       gameId: String(g.gameId || ""),
       date: g.gameDate || '',
@@ -176,7 +183,7 @@ export default async function handler(req, res) {
       homeScore: g.homeTeamScore!=null ? Number(g.homeTeamScore) : null,
       awayInnings, homeInnings,
       inningInfo: g.statusInfo || null,
-      currentGameState: detail?.currentGameState || null,
+      currentGameState: enrichedGs,
       textRelays: textRelaysData,
       awayStarter,
       homeStarter,
