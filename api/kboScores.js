@@ -144,6 +144,9 @@ export default async function handler(req, res) {
         base1:  bestGs.base1  ?? bestGs.runner1      ?? 0,
         base2:  bestGs.base2  ?? bestGs.runner2      ?? 0,
         base3:  bestGs.base3  ?? bestGs.runner3      ?? 0,
+        // 투수/타자 이름 정규화
+        pitcherName: bestGs.pitcherName || bestGs.currentPitcherName || bestGs.pitcher || '',
+        batterName:  bestGs.batterName  || bestGs.currentBatterName  || bestGs.batter  || '',
       };
     }
 
