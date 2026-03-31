@@ -1872,20 +1872,41 @@ function renderStand(d) {
   if (!_standCache) {
     fetchStanding().then(r => { if(r) render(); });
     // 로딩 중 → 하드코딩된 최신 순위 임시 표시
-    return renderStandRows(d, KBO_2026_FALLBACK, '2026.03.29 기준 (업데이트 중...)');
+    return renderStandRows(d, KBO_2026_FALLBACK, '로딩 중...');
   }
 
   const TCODE = {'HT':'KIA','KT':'KT','LG':'LG','SK':'SSG','NC':'NC','OB':'두산','LT':'롯데','SS':'삼성','HH':'한화','WO':'키움'};
-  const rows = _standCache.map((t,i) => {
-    const code = t.teamCode || t.teamId || '';
-    const tkey = TCODE[code] || code;
-    const win = t.win ?? t.w ?? 0;
-    const lose = t.lose ?? t.l ?? 0;
-    const draw = t.drawn ?? t.d ?? 0;
-    const pct = t.wra ?? t.gameRate ?? (win+lose>0 ? (win/(win+lose)).toFixed(3) : '-');
-    const gb = t.gamesBehind ?? t.gb ?? '';
-    return { rank:i+1, tkey, win, lose, draw, pct, gb };
-  });
+  const rows = (function() {
+    const base = _standCache.map((t) => {
+      const code = t.teamCode || t.teamId || '';
+      const tkey = TCODE[code] || code;
+      const win = t.win ?? t.w ?? 0;
+      const lose = t.lose ?? t.l ?? 0;
+      const draw = t.drawn ?? t.d ?? 0;
+      const pctRaw = t.wra ?? t.gameRate ?? (win+lose>0 ? win/(win+lose) : null);
+      const pct = pctRaw != null ? (typeof pctRaw==='string' ? pctRaw : pctRaw.toFixed(3)) : '-';
+      const gb = t.gamesBehind ?? t.gb ?? '';
+      // API가 rank를 직접 주면 사용
+      const apiRank = t.rank ?? t.ranking ?? null;
+      return { apiRank, tkey, win, lose, draw, pct, pctRaw, gb };
+    });
+    // API rank가 있으면 그대로, 없으면 승률 기준 공동순위 계산
+    if(base.every(r => r.apiRank != null)) {
+      return base.map(r => ({ ...r, rank: r.apiRank }));
+    }
+    // 승률 내림차순 정렬 후 공동순위 부여
+    base.sort((a,b) => (b.pctRaw ?? -1) - (a.pctRaw ?? -1));
+    let rank = 1;
+    base.forEach((r, i) => {
+      if(i > 0 && r.pctRaw === base[i-1].pctRaw) {
+        r.rank = base[i-1].rank;
+      } else {
+        r.rank = rank;
+      }
+      rank = i + 2;
+    });
+    return base;
+  })();
 
   const updTime = new Date(_standCacheTime).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   return renderStandRows(d, rows, '업데이트 '+updTime);
