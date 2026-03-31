@@ -3009,52 +3009,71 @@ function renderRelayText(relays, away, home) {
 
   return relays.map((item, idx) => {
     const title = item.title || item.text || item.description || '';
-    if (!title) {
-      console.warn(`Relay item ${idx} has no title/text`, item);
-      return '';
-    }
-    
-    console.log(`Rendering relay item ${idx}: ${title.substring(0, 50)}...`);
+    if (!title) return '';
+
+    // typeKey: item.type 또는 textOptions[0].type
     const opts = item.textOptions || [];
-    const typeKey = opts.length > 0 ? opts[0]?.type : null;
-    const last = opts.length > 0 ? opts[opts.length-1] : null;
-    const gs2 = last?.currentGameState;
+    const typeKey = item.type ?? (opts.length > 0 ? opts[0]?.type : null);
+    // 스코어: textOptions 마지막 항목 또는 item 자체
+    const last = opts.length > 0 ? opts[opts.length-1] : item;
+    const gs2 = last?.currentGameState || item.currentGameState;
     const awayS = gs2?.awayScore ?? '';
     const homeS = gs2?.homeScore ?? '';
 
-    if (typeKey === 0) {
-      return `<div style="text-align:center;padding:10px 16px;font-size:12px;font-weight:700;color:${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'};background:${dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'};border-bottom:1px solid ${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}">${title}</div>`;
+    // 이닝 구분선 (타입 0 또는 '이닝' 포함)
+    const isInningHeader = typeKey === 0 || (typeof typeKey === 'string' && typeKey === 'INNING')
+      || (title.match(/^\d+회(초|말)/) && !title.includes('번타자') && !title.includes('|'));
+    if (isInningHeader) {
+      return \`<div style="text-align:center;padding:10px 16px;font-size:12px;font-weight:700;color:\${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'};background:\${dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'};border-bottom:1px solid \${dark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}">⚾ \${title}</div>\`;
     }
 
+    // 배지: 제목 키워드로 분류 (typeKey와 무관하게 항상 동작)
     let badge = '', bdColor = '#555', bdBg = 'rgba(0,0,0,0.07)';
-    if (typeKey === 13) {
-      if (title.includes('홈런'))         { badge='홈런'; bdColor='#E31837'; bdBg='rgba(227,24,55,0.1)'; }
-      else if (title.match(/[23]루타|안타/)) { badge='안타'; bdColor='#E31837'; bdBg='rgba(227,24,55,0.08)'; }
-      else if (title.includes('볼넷'))     { badge='볼넷'; bdColor='#0078ff'; bdBg='rgba(0,120,255,0.08)'; }
-      else if (title.includes('삼진'))     { badge='삼진'; bdColor='#888'; bdBg='rgba(0,0,0,0.06)'; }
-      else if (title.match(/아웃|출루/))   { badge='아웃'; bdColor='#555'; bdBg='rgba(0,0,0,0.06)'; }
-    } else if (typeKey === 8) {
-      badge='타자'; bdColor='#555'; bdBg='rgba(0,0,0,0.05)';
-    } else if ([9,10,11,12].includes(typeKey)) {
+
+    if (title.includes('홈런')) {
+      badge='홈런 🔴'; bdColor='#E31837'; bdBg='rgba(227,24,55,0.12)';
+    } else if (title.match(/3루타/)) {
+      badge='3루타'; bdColor='#E31837'; bdBg='rgba(227,24,55,0.1)';
+    } else if (title.match(/2루타/)) {
+      badge='2루타'; bdColor='#E31837'; bdBg='rgba(227,24,55,0.1)';
+    } else if (title.match(/1루타|안타/) && !title.includes('내야안타')) {
+      badge='안타'; bdColor='#E31837'; bdBg='rgba(227,24,55,0.08)';
+    } else if (title.includes('내야안타')) {
+      badge='내야안타'; bdColor='#FF6600'; bdBg='rgba(255,102,0,0.1)';
+    } else if (title.match(/삼진|스트라이크 아웃/)) {
+      badge='삼진'; bdColor='#666'; bdBg='rgba(0,0,0,0.07)';
+    } else if (title.match(/볼넷|사구|고의사구/)) {
+      badge='볼넷'; bdColor='#0078ff'; bdBg='rgba(0,120,255,0.09)';
+    } else if (title.match(/땅볼 아웃|플라이 아웃|라인드라이브 아웃|파울 플라이|병살/)) {
+      badge='아웃'; bdColor='#555'; bdBg='rgba(0,0,0,0.07)';
+    } else if (title.match(/아웃|출루/)) {
+      badge='아웃'; bdColor='#555'; bdBg='rgba(0,0,0,0.07)';
+    } else if (title.match(/교체|대타|대주자|투수 교체/)) {
       badge='교체'; bdColor='#FF9500'; bdBg='rgba(255,149,0,0.1)';
-    } else if (title.includes('알림')||title.includes('마운드')) {
+    } else if (title.match(/희생|희타|희플/)) {
+      badge='희생'; bdColor='#888'; bdBg='rgba(0,0,0,0.07)';
+    } else if (title.match(/폭투|보크|패스트볼/)) {
+      badge='특수'; bdColor='#9C27B0'; bdBg='rgba(156,39,176,0.08)';
+    } else if (title.match(/알림|마운드 방문|심판|비디오/)) {
       badge='알림'; bdColor='#E31837'; bdBg='rgba(227,24,55,0.08)';
+    } else if (title.match(/번타자|\d+번/)) {
+      badge='타자'; bdColor='#777'; bdBg='rgba(0,0,0,0.05)';
     }
 
     const scoreDisp = (awayS!==''&&homeS!=='') ?
-      `<span style="font-size:11px;color:${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'}">
-        ${away} <b style="color:${awayColor}">${awayS}</b>
+      \`<span style="font-size:11px;color:\${dark?'rgba(255,255,255,0.4)':'rgba(0,0,0,0.4)'}">
+        \${away} <b style="color:\${awayColor}">\${awayS}</b>
         <span style="margin:0 3px">:</span>
-        <b style="color:${homeColor}">${homeS}</b> ${home}
-      </span>` : '';
+        <b style="color:\${homeColor}">\${homeS}</b> \${home}
+      </span>\` : '';
 
-    return `<div style="padding:11px 16px;border-bottom:1px solid ${dark?'rgba(255,255,255,0.055)':'rgba(0,0,0,0.055)'};display:flex;align-items:flex-start;gap:10px">
-      <span style="flex-shrink:0;font-size:10px;font-weight:700;color:${bdColor};background:${bdBg};border:1px solid ${bdColor}33;border-radius:5px;padding:2px 7px;margin-top:2px;white-space:nowrap">${badge||'　'}</span>
+    return \`<div style="padding:11px 16px;border-bottom:1px solid \${dark?'rgba(255,255,255,0.055)':'rgba(0,0,0,0.055)'};display:flex;align-items:flex-start;gap:10px">
+      <span style="flex-shrink:0;font-size:10px;font-weight:700;color:\${bdColor};background:\${bdBg};border:1px solid \${bdColor}33;border-radius:5px;padding:2px 7px;margin-top:2px;white-space:nowrap">\${badge||'　'}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;color:${dark?'#fff':'#0A0E1A'};line-height:1.5">${title}</div>
-        ${scoreDisp?`<div style="margin-top:3px">${scoreDisp}</div>`:''}
+        <div style="font-size:13px;color:\${dark?'#fff':'#0A0E1A'};line-height:1.5">\${title}</div>
+        \${scoreDisp?\`<div style="margin-top:3px">\${scoreDisp}</div>\`:''}
       </div>
-    </div>`;
+    </div>\`;
   }).join('');
 }
 
