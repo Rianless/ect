@@ -1474,6 +1474,13 @@ function saveTodos(list) {
   localStorage.setItem('kbo_todos', JSON.stringify(list));
 }
 
+let _todoSortAsc = false; // false = 최신순(기본), true = 오래된순
+
+window.toggleTodoSort = function() {
+  _todoSortAsc = !_todoSortAsc;
+  _refreshTodoList();
+};
+
 function renderTodoMemo(d) {
   const todos = getTodos();
   const pad2 = n => String(n).padStart(2,'0');
@@ -1483,7 +1490,7 @@ function renderTodoMemo(d) {
 
   let html = '';
 
-  // 입력창
+  // 입력창 + 정렬 버튼
   html += `<div style="display:flex;gap:8px;margin-bottom:14px">
     <input id="todo-input" type="text" placeholder="새 메모 입력..." maxlength="100"
       autocomplete="off"
@@ -1495,6 +1502,13 @@ function renderTodoMemo(d) {
       -webkit-user-select:text;user-select:text"/>
     <button onclick="addTodo()" style="padding:10px 14px;background:#E31837;color:#fff;border:none;
       border-radius:10px;font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;white-space:nowrap">추가</button>
+  </div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button id="todo-sort-btn" onclick="toggleTodoSort()"
+      style="font-size:11px;font-weight:700;color:${d.sub};background:${d.bg};border:1px solid ${d.bgB};
+      border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'Noto Sans KR',sans-serif">
+      ${_todoSortAsc ? '↑ 오래된순' : '↓ 최신순'}
+    </button>
   </div>`;
 
   // 리스트 컨테이너 (DOM 직접 업데이트를 위해 id 부여)
@@ -1513,8 +1527,8 @@ function renderTodoMemo(d) {
     groups[t.date].push(t);
   });
 
-  // 최신 날짜 먼저
-  Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(date => {
+  // 정렬 방향 적용
+  Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a)).forEach(date => {
     const [y,m,da] = date.split('-');
     const dayObj = new Date(date+'T12:00:00');
     const dayLabel = dw[dayObj.getDay()];
@@ -1527,13 +1541,21 @@ function renderTodoMemo(d) {
       </div>`;
 
     groups[date].forEach(t => {
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px;margin-bottom:6px">
+      let tagBadge = '';
+      if (t.tag) {
+        const parts = t.tag.split('|');
+        if (parts.length === 3) {
+          const [,tAway,tHome] = parts;
+          tagBadge = `<div style="margin-bottom:3px"><span style="font-size:10px;background:rgba(227,24,55,0.1);color:#E31837;border-radius:4px;padding:1px 6px;font-weight:700">⚾ ${tAway}↔${tHome}</span></div>`;
+        }
+      }
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${t.tag?'rgba(227,24,55,0.2)':d.bgB};border-radius:10px;margin-bottom:6px">
         <button onclick="toggleTodo('${t.id}')"
           style="width:22px;height:22px;border-radius:50%;border:2px solid ${t.done?'#E31837':d.bgB};
           background:${t.done?'#E31837':'transparent'};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
           ${t.done?'<span style="color:#fff;font-size:12px">✓</span>':''}
         </button>
-        <span style="flex:1;font-size:13px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''};line-height:1.4">${t.text}</span>
+        <div style="flex:1;min-width:0">${tagBadge}<span style="font-size:13px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''}line-height:1.4">${t.text}</span></div>
         <button onclick="deleteTodo('${t.id}')"
           style="color:${d.sub};font-size:16px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1">×</button>
       </div>`;
@@ -1580,6 +1602,10 @@ window._refreshTodoList = function() {
     return;
   }
 
+  // 정렬 버튼 텍스트 업데이트
+  const sortBtn = document.getElementById('todo-sort-btn');
+  if (sortBtn) sortBtn.textContent = _todoSortAsc ? '↑ 오래된순' : '↓ 최신순';
+
   const groups = {};
   todos.forEach(t => {
     if (!groups[t.date]) groups[t.date] = [];
@@ -1587,7 +1613,7 @@ window._refreshTodoList = function() {
   });
 
   let html = '';
-  Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(date => {
+  Object.keys(groups).sort((a,b) => _todoSortAsc ? a.localeCompare(b) : b.localeCompare(a)).forEach(date => {
     const [y,m,da] = date.split('-');
     const dayObj = new Date(date+'T12:00:00');
     const dayLabel = dw[dayObj.getDay()];
@@ -1598,13 +1624,21 @@ window._refreshTodoList = function() {
         ${isToday?`<span style="font-size:10px;background:rgba(227,24,55,0.1);color:#E31837;border-radius:4px;padding:1px 6px;font-weight:700">오늘</span>`:''}
       </div>`;
     groups[date].forEach(t => {
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px;margin-bottom:6px">
+      let tagBadge2 = '';
+      if (t.tag) {
+        const parts = t.tag.split('|');
+        if (parts.length === 3) {
+          const [,tAway,tHome] = parts;
+          tagBadge2 = `<div style="margin-bottom:3px"><span style="font-size:10px;background:rgba(227,24,55,0.1);color:#E31837;border-radius:4px;padding:1px 6px;font-weight:700">⚾ ${tAway}↔${tHome}</span></div>`;
+        }
+      }
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:${d.bg};border:1px solid ${t.tag?'rgba(227,24,55,0.2)':d.bgB};border-radius:10px;margin-bottom:6px">
         <button onclick="toggleTodo('${t.id}')"
           style="width:22px;height:22px;border-radius:50%;border:2px solid ${t.done?'#E31837':d.bgB};
           background:${t.done?'#E31837':'transparent'};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
           ${t.done?'<span style="color:#fff;font-size:12px">✓</span>':''}
         </button>
-        <span style="flex:1;font-size:13px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''};line-height:1.4">${t.text}</span>
+        <div style="flex:1;min-width:0">${tagBadge2}<span style="font-size:13px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''}line-height:1.4">${t.text}</span></div>
         <button onclick="deleteTodo('${t.id}')"
           style="color:${d.sub};font-size:16px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1">×</button>
       </div>`;
@@ -3453,6 +3487,19 @@ window.openTicketPanel = function(stad, date, away, home) {
           ☕ <span>카페</span>
         </a>
       </div>
+    </div>
+    <div style="padding:10px 18px 4px">
+      <div style="font-size:11px;font-weight:700;color:${subColor};margin-bottom:7px">📝 직관 메모</div>
+      <div id="ticket-todo-list" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <input id="ticket-todo-input" type="text" placeholder="준비물, 좌석 메모 등..." maxlength="80"
+          autocomplete="off"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addTicketTodo();}"
+          onclick="event.stopPropagation()" ontouchstart="event.stopPropagation()"
+          style="flex:1;padding:9px 12px;border-radius:10px;font-size:13px;font-family:'Noto Sans KR',sans-serif;outline:none;-webkit-user-select:text;user-select:text;background:${dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.04)'};border:1px solid ${divColor};color:${dark?'#fff':'#0A0E1A'}"/>
+        <button onclick="addTicketTodo()"
+          style="padding:9px 14px;background:#E31837;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;white-space:nowrap">추가</button>
+      </div>
     </div>`;
 
   linksEl.innerHTML = metaHtml + info.links.map(l =>
@@ -3468,6 +3515,52 @@ window.openTicketPanel = function(stad, date, away, home) {
   panel.classList.add('open');
   document.body.style.overflow = 'hidden';
   history.pushState({ticketPanel:true}, '');
+
+  // 직관 메모 태그 저장 후 초기 렌더
+  _ticketTodoTag = `${date}|${away}|${home}`;
+  _renderTicketTodos();
+};
+
+// ── 직관 메모 (티켓팅 바텀시트 ↔ 마이페이지 메모 탭 공유) ──
+let _ticketTodoTag = '';
+
+function _renderTicketTodos() {
+  const el = document.getElementById('ticket-todo-list');
+  if (!el) return;
+  const dark = document.body.classList.contains('dark');
+  const d = D();
+  const todos = getTodos().filter(t => t.tag === _ticketTodoTag);
+  if (!todos.length) {
+    el.innerHTML = `<div style="font-size:12px;color:${d.sub};padding:4px 0 6px">아직 메모가 없어요</div>`;
+    return;
+  }
+  el.innerHTML = todos.map(t => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${dark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'};border-radius:8px;margin-bottom:5px">
+      <button onclick="toggleTodo('${t.id}');_renderTicketTodos()"
+        style="width:20px;height:20px;border-radius:50%;border:2px solid ${t.done?'#E31837':d.bgB};
+        background:${t.done?'#E31837':'transparent'};flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center">
+        ${t.done?'<span style="color:#fff;font-size:11px">✓</span>':''}
+      </button>
+      <span style="flex:1;font-size:12px;color:${t.done?d.sub:d.text};${t.done?'text-decoration:line-through;':''}line-height:1.4">${t.text}</span>
+      <button onclick="deleteTodo('${t.id}');_renderTicketTodos()"
+        style="color:${d.sub};font-size:15px;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1">×</button>
+    </div>`).join('');
+}
+
+window.addTicketTodo = function() {
+  const input = document.getElementById('ticket-todo-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const pad2 = n => String(n).padStart(2,'0');
+  const now = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
+  const date = now.getFullYear()+'-'+pad2(now.getMonth()+1)+'-'+pad2(now.getDate());
+  const todos = getTodos();
+  todos.unshift({ id: Date.now().toString(), text, date, done: false, tag: _ticketTodoTag });
+  saveTodos(todos);
+  input.value = '';
+  input.focus();
+  _renderTicketTodos();
 };
 
 window.closeTicketPanel = function() {
