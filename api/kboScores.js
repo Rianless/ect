@@ -243,13 +243,20 @@ export default async function handler(req, res) {
       winPitcher: gameData.winPitcherName || g.winPitcherName || null,
       losePitcher: gameData.losePitcherName || g.losePitcherName || null,
       lineup: detail ? (() => {
-        // lineUpData 구조 (네이버 lineup API)
-        const lu = detail.lineUpData || {};
-        const awayL = lu.awayLineup || lu.awayTeamLineup || detail.awayLineup || detail.awayTeamLineup || detail.lineup?.away || {};
-        const homeL = lu.homeLineup || lu.homeTeamLineup || detail.homeLineup || detail.homeTeamLineup || detail.lineup?.home || {};
+        // 다양한 경로 커버: lineUpData, game-polling의 game 객체, 직접 필드
+        const gp = detail.game || {};
+        const lu = detail.lineUpData || gp.lineUpData || {};
+        const awayL = lu.awayLineup || lu.awayTeamLineup
+          || gp.awayLineup || gp.awayTeamLineup
+          || detail.awayLineup || detail.awayTeamLineup
+          || detail.lineup?.away || {};
+        const homeL = lu.homeLineup || lu.homeTeamLineup
+          || gp.homeLineup || gp.homeTeamLineup
+          || detail.homeLineup || detail.homeTeamLineup
+          || detail.lineup?.home || {};
         const awayBatters = awayL.batter || awayL.batters || awayL.batterList || awayL.players || [];
         const homeBatters = homeL.batter || homeL.batters || homeL.batterList || homeL.players || [];
-
+        console.log('[lineup parse] awayB:', awayBatters.length, 'homeB:', homeBatters.length, 'gp keys:', Object.keys(gp).slice(0,10));
         if (!awayBatters.length && !homeBatters.length) return null;
         return {
           away: { batters: awayBatters, pitcher: awayL.pitcher || awayL.pitchers || [] },
