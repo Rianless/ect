@@ -239,7 +239,7 @@ export default async function handler(req, res) {
         const homeL = lu.homeLineup || lu.homeTeamLineup || detail.homeLineup || detail.homeTeamLineup || detail.lineup?.home || {};
         const awayBatters = awayL.batter || awayL.batters || awayL.batterList || awayL.players || [];
         const homeBatters = homeL.batter || homeL.batters || homeL.batterList || homeL.players || [];
-        console.log('[lineup debug] awayBatters:', awayBatters.length, 'homeBatters:', homeBatters.length, 'lineUpData keys:', Object.keys(lu).slice(0,15));
+        console.log('[lineup debug2] lineUpData full:', JSON.stringify(detail.lineUpData).slice(0,300));
         if (!awayBatters.length && !homeBatters.length) return null;
         return {
           away: { batters: awayBatters, pitcher: awayL.pitcher || awayL.pitchers || [] },
