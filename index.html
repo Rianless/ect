@@ -2165,13 +2165,6 @@ function renderModal(d) {
           </div>
         </div>
       </div>`:''}
-      <div style="margin-bottom:18px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
-          <span style="font-size:15px">📊</span>
-          <span style="font-size:13px;font-weight:800;color:${d.text}">이닝별 스코어</span>
-        </div>
-        <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
-      </div>
       ${(g.awayStarter||g.homeStarter||g.winPitcher||g.losePitcher||g.awayPitcher||g.homePitcher)?`<div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
           <span style="font-size:15px">⚾</span>
@@ -2247,7 +2240,14 @@ function renderModal(d) {
             </div>`;
           })()}
         </div>
-      </div>`:''}
+      </div>`:''}      <div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+          <span style="font-size:15px">📊</span>
+          <span style="font-size:13px;font-weight:800;color:${d.text}">이닝별 스코어</span>
+        </div>
+        <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
+      </div>
+
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">🧢</span>
