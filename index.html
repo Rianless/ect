@@ -2248,6 +2248,7 @@ function renderModal(d) {
           </div>
         </div>
       </div>`:''}
+      <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">🧢</span>
@@ -2481,6 +2482,7 @@ function renderModal(d) {
           })()}
         </div>`}
       </div>
+      </div>
 
       <!-- ── 라인업 섹션 (타순 그리드) ── -->
       ${hasLU ? `<div style="margin-bottom:18px">
@@ -2519,8 +2521,8 @@ function renderModal(d) {
           </div>
         </div>
       </div>` : ''}
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">📝</span>
             <span style="font-size:13px;font-weight:800;color:${d.text}">경기 후기</span>
@@ -4251,5 +4253,6 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
 
