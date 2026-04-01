@@ -907,7 +907,7 @@ async function fetchWeather(stad) {
     else if (wcode<=2)      {icon='🌤️'; desc='구름조금';}
     else if (wcode===3)     {icon='☁️'; desc='흐림';}
     else if (wcode<=49)     {icon='🌫️'; desc='안개';}
-    else if (wcode<=55)     {icon='🌧️'; desc='이슬비';}
+    else if (wcode<=55)     {icon='☁️'; desc='흐림';}
     else if (wcode<=65)     {icon='🌧️'; desc='비';}
     else if (wcode<=77)     {icon='❄️'; desc='눈';}
     else if (wcode<=82)     {icon='🌦️'; desc='소나기';}
@@ -2519,7 +2519,7 @@ function renderModal(d) {
           </div>
         </div>
       </div>` : ''}
-      <div>
+      <div style="margin-bottom:18px;margin-left:16px;margin-right:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">📝</span>
@@ -2533,7 +2533,7 @@ function renderModal(d) {
             return `<button onclick="saveMemoField('watch','${v}')" style="flex:1;padding:7px 0;background:${sel?'#E31837':'transparent'};border:1.5px solid ${sel?'#E31837':d.bgB};color:${sel?'#fff':d.sub};border-radius:8px;font-size:12px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${v==='직관'?'⚾ 직관':v==='집관'?'📺 집관':'— 미시청'}</button>`;
           }).join('')}
         </div>
-        <textarea id="memo-input" placeholder="이 경기에 대한 생각이나 메모를 남겨보세요 ✍️" style="width:100%;min-height:90px;padding:12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;color:${d.text};font-size:13px;line-height:1.6;resize:none;-webkit-user-select:text;user-select:text">${memoData.text||''}</textarea>
+        <textarea id="memo-input" placeholder="이 경기에 대한 생각이나 메모를 남겨보세요 ✍️" style="width:100%;min-height:90px;padding:12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;color:${d.text};font-size:13px;line-height:1.6;resize:none;-webkit-user-select:text;user-select:text;box-sizing:border-box">${memoData.text||''}</textarea>
         <div style="margin-top:8px">
           <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px">
             <span style="font-size:13px">📷</span>
