@@ -233,12 +233,13 @@ export default async function handler(req, res) {
       winPitcher: gameData.winPitcherName || g.winPitcherName || null,
       losePitcher: gameData.losePitcherName || g.losePitcherName || null,
       lineup: detail ? (() => {
-        // 네이버 lineup API 응답 구조 다양하게 커버
-        const awayL = detail.awayLineup || detail.awayTeamLineup || detail.lineup?.away || {};
-        const homeL = detail.homeLineup || detail.homeTeamLineup || detail.lineup?.home || {};
+        // lineUpData 구조 (네이버 lineup API)
+        const lu = detail.lineUpData || {};
+        const awayL = lu.awayLineup || lu.awayTeamLineup || detail.awayLineup || detail.awayTeamLineup || detail.lineup?.away || {};
+        const homeL = lu.homeLineup || lu.homeTeamLineup || detail.homeLineup || detail.homeTeamLineup || detail.lineup?.home || {};
         const awayBatters = awayL.batter || awayL.batters || awayL.batterList || awayL.players || [];
         const homeBatters = homeL.batter || homeL.batters || homeL.batterList || homeL.players || [];
-        console.log('[lineup debug] awayBatters:', awayBatters.length, 'homeBatters:', homeBatters.length, 'detail keys:', Object.keys(detail).slice(0,15));
+        console.log('[lineup debug] awayBatters:', awayBatters.length, 'homeBatters:', homeBatters.length, 'lineUpData keys:', Object.keys(lu).slice(0,15));
         if (!awayBatters.length && !homeBatters.length) return null;
         return {
           away: { batters: awayBatters, pitcher: awayL.pitcher || awayL.pitchers || [] },
