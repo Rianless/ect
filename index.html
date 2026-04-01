@@ -1311,11 +1311,12 @@ window._fetchPlayerStats = async function(tab) {
       throw new Error(errData.error || `서버 오류 ${pr.status}`);
     }
     const pd = await pr.json();
-    players = extractPlayers(pd) || [];
+    players = extractPlayers(pd);
+    if (!players) throw new Error('선수 데이터 형식 오류');
 
     state.playerStats = { tab, data: players };
   } catch(e) {
-    state.playerStatsError = '데이터를 불러오지 못했어요 😢';
+    state.playerStatsError = e.message || '데이터를 불러오지 못했어요 😢';
     state.playerStats = null;
   }
   state.playerStatsLoading = false;
@@ -1323,7 +1324,11 @@ window._fetchPlayerStats = async function(tab) {
 };
 
 function renderHitterTable(d, players) {
-  if (!players.length) return '<div style="text-align:center;padding:40px 0;color:'+d.sub+'">선수 데이터가 없어요</div>';
+  if (!players.length) return '<div style="text-align:center;padding:40px 20px">'
+    + '<div style="font-size:32px;margin-bottom:8px">📋</div>'
+    + '<div style="font-size:13px;color:'+d.sub+';margin-bottom:12px">선수 데이터가 없어요</div>'
+    + '<button onclick="window._fetchPlayerStats(\'hitter\')" style="padding:8px 20px;background:#E31837;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;font-family:\'Noto Sans KR\',sans-serif;cursor:pointer">🔄 다시 불러오기</button>'
+    + '</div>';
   const cols = [
     {key:'playerName',label:'선수',w:'88px'},
     {key:'hitterHra',label:'타율',w:'52px',fmt:v=>v!=null?Number(v).toFixed(3).replace(/^0/,''):'—'},
@@ -1358,7 +1363,11 @@ function renderHitterTable(d, players) {
 }
 
 function renderPitcherTable(d, players) {
-  if (!players.length) return '<div style="text-align:center;padding:40px 0;color:'+d.sub+'">선수 데이터가 없어요</div>';
+  if (!players.length) return '<div style="text-align:center;padding:40px 20px">'
+    + '<div style="font-size:32px;margin-bottom:8px">📋</div>'
+    + '<div style="font-size:13px;color:'+d.sub+';margin-bottom:12px">선수 데이터가 없어요</div>'
+    + '<button onclick="window._fetchPlayerStats(\'pitcher\')" style="padding:8px 20px;background:#E31837;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;font-family:\'Noto Sans KR\',sans-serif;cursor:pointer">🔄 다시 불러오기</button>'
+    + '</div>';
   // 네이버 API 투수 필드명 — pitcherEra / pitcherWin / pitcherLose / pitcherSv(세이브) / pitcherHld(홀드) / pitcherIp / pitcherKk / pitcherWhip
   // 실제 필드명은 첫 번째 선수 객체의 키를 검사해 동적으로 매핑
   const sample = players[0] || {};
@@ -1431,7 +1440,8 @@ function renderBaseballRecord(d) {
   if (state.playerStatsError) {
     html += '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:40px;margin-bottom:12px">😢</div>'
-      + '<div style="font-size:14px;font-weight:700;color:'+d.text+'">'+state.playerStatsError+'</div>'
+      + '<div style="font-size:14px;font-weight:700;color:'+d.text+'">데이터를 불러오지 못했어요</div>'
+      + '<div style="font-size:11px;color:'+d.sub+';margin-top:6px;word-break:break-all">'+state.playerStatsError+'</div>'
       + '<button onclick="window._fetchPlayerStats(\''+rt+'\')" style="margin-top:16px;padding:10px 24px;background:#E31837;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:\'Noto Sans KR\',sans-serif;cursor:pointer">다시 시도</button>'
       + '</div>';
     return html;
@@ -2338,13 +2348,17 @@ function renderModal(d) {
       </div>
     </div>
     <div style="padding:18px">
-      <div style="margin-bottom:18px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
-          <span style="font-size:15px">📊</span>
-          <span style="font-size:13px;font-weight:800;color:${d.text}">이닝별 스코어</span>
+      ${g.stad?`<div style="margin-bottom:18px">
+        <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span style="font-size:13px">📍</span>
+            <span style="font-size:11px;font-weight:700;color:${d.sub}">${g.stad} · 현재 날씨</span>
+          </div>
+          <div id="modal-weather-${g.gameId}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;color:${d.sub}">불러오는 중...</span>
+          </div>
         </div>
-        <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
-      </div>
+      </div>`:''}
       ${(g.awayStarter||g.homeStarter||g.winPitcher||g.losePitcher||g.awayPitcher||g.homePitcher)?`<div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
           <span style="font-size:15px">⚾</span>
@@ -2421,17 +2435,13 @@ function renderModal(d) {
           })()}
         </div>
       </div>`:''}
-      ${g.stad?`<div style="margin-bottom:18px">
-        <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:14px;padding:12px 16px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <span style="font-size:13px">📍</span>
-            <span style="font-size:11px;font-weight:700;color:${d.sub}">${g.stad} · 현재 날씨</span>
-          </div>
-          <div id="modal-weather-${g.gameId}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-size:11px;color:${d.sub}">불러오는 중...</span>
-          </div>
+      <div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+          <span style="font-size:15px">📊</span>
+          <span style="font-size:13px;font-weight:800;color:${d.text}">이닝별 스코어</span>
         </div>
-      </div>`:''}
+        <div style="background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;padding:4px">${inningHtml}</div>
+      </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:15px">🧢</span>
@@ -4445,3 +4455,4 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
