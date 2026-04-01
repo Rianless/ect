@@ -1297,17 +1297,26 @@ window._fetchPlayerStats = async function(tab) {
     // 2차: 네이버 API 직접 호출
     let players = null;
 
+    // 네이버 API 응답에서 선수 배열 추출 (다양한 필드명 커버)
+    const extractPlayers = (d) => {
+      const r = d?.result || {};
+      return r.seasonPlayerStats || r.playerList || r.players || r.list || null;
+    };
+
     // 백엔드 프록시 시도
     try {
       const proxyUrl = `/api/kboScores?action=playerStats&tab=${type}&teamCode=HT&seasonCode=2026`;
       const pr = await fetch(proxyUrl);
       if (pr.ok) {
         const pd = await pr.json();
-        if (pd?.result?.seasonPlayerStats) {
-          players = pd.result.seasonPlayerStats;
+        const extracted = extractPlayers(pd);
+        if (extracted && extracted.length > 0) {
+          players = extracted;
+        } else {
+          console.log('[playerStats] 프록시 응답 구조 확인:', JSON.stringify(pd).slice(0, 300));
         }
       }
-    } catch(e) {}
+    } catch(e) { console.log('[playerStats] 프록시 오류:', e.message); }
 
     // 직접 호출 fallback
     if (!players) {
@@ -1321,7 +1330,7 @@ window._fetchPlayerStats = async function(tab) {
       });
       if (!res.ok) throw new Error('API 오류 ' + res.status);
       const data = await res.json();
-      players = data?.result?.seasonPlayerStats || [];
+      players = extractPlayers(data) || [];
     }
 
     state.playerStats = { tab, data: players };
