@@ -97,7 +97,10 @@ export default async function handler(req, res) {
         // 어떤 URL이 유효한 라인업을 줬는지 로깅
         const hasData = res.lineUpData || res.awayLineup || res.homeLineup || res.game;
         console.log('[lineup url]', url.split('/').slice(-1)[0], '→ keys:', Object.keys(res), 'hasData:', !!hasData);
-        if (hasData) return res;
+        if (hasData) {
+          console.log('[lineup game keys]', JSON.stringify(Object.keys(res.game||{})).slice(0,300));
+          return res;
+        }
       } catch(e) {}
     }
     return null;
