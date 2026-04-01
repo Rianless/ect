@@ -82,6 +82,8 @@ export default async function handler(req, res) {
   async function fetchLineup(gameId, inning) {
     const inn = inning || 1;
     const urls = [
+      `https://api-gw.sports.naver.com/schedule/games/${gameId}/preview`,
+      `https://api-gw.sports.naver.com/schedule/games/${gameId}/starting-lineup`,
       `https://api-gw.sports.naver.com/schedule/games/${gameId}/lineup`,
       `https://api-gw.sports.naver.com/schedule/games/${gameId}/game-polling?inning=${inn}&isHighlight=false`,
     ];
@@ -90,7 +92,12 @@ export default async function handler(req, res) {
         const r = await fetch(url, { headers: HEADERS });
         if (!r.ok) continue;
         const data = await r.json();
-        if (data?.result) return data.result;
+        if (!data?.result) continue;
+        const res = data.result;
+        // 어떤 URL이 유효한 라인업을 줬는지 로깅
+        const hasData = res.lineUpData || res.awayLineup || res.homeLineup || res.game;
+        console.log('[lineup url]', url.split('/').slice(-1)[0], '→ keys:', Object.keys(res), 'hasData:', !!hasData);
+        if (hasData) return res;
       } catch(e) {}
     }
     return null;
@@ -239,10 +246,7 @@ export default async function handler(req, res) {
         const homeL = lu.homeLineup || lu.homeTeamLineup || detail.homeLineup || detail.homeTeamLineup || detail.lineup?.home || {};
         const awayBatters = awayL.batter || awayL.batters || awayL.batterList || awayL.players || [];
         const homeBatters = homeL.batter || homeL.batters || homeL.batterList || homeL.players || [];
-        // game-polling 응답 구조: game, textRelayData, relatedGames
-        const gp = detail.game || {};
-        console.log('[lineup debug4] game keys:', Object.keys(gp).slice(0,20));
-        console.log('[lineup debug4] game sample:', JSON.stringify(gp).slice(0,500));
+
         if (!awayBatters.length && !homeBatters.length) return null;
         return {
           away: { batters: awayBatters, pitcher: awayL.pitcher || awayL.pitchers || [] },
