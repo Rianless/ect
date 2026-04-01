@@ -232,6 +232,10 @@ export default async function handler(req, res) {
       homeStarter,
       winPitcher: gameData.winPitcherName || g.winPitcherName || null,
       losePitcher: gameData.losePitcherName || g.losePitcherName || null,
+      lineup: detail ? {
+        away: { batter: detail.awayLineup?.batter || [], pitcher: detail.awayLineup?.pitcher || [] },
+        home: { batter: detail.homeLineup?.batter || [], pitcher: detail.homeLineup?.pitcher || [] },
+      } : null,
     };
   }
 
