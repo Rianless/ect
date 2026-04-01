@@ -280,7 +280,14 @@ export default async function handler(req, res) {
       const r = await fetch(url, { headers: HEADERS });
       if (!r.ok) return res.status(r.status).json({ error: `stats ${r.status}` });
       const data = await r.json();
-      return res.status(200).json(data);
+      // 네이버 API 응답의 다양한 필드명을 seasonPlayerStats로 정규화
+      const result = data?.result || {};
+      const players = result.seasonPlayerStats
+        || result.playerList
+        || result.players
+        || result.list
+        || [];
+      return res.status(200).json({ result: { seasonPlayerStats: players } });
     }
 
     if (gameId && action === 'lineup') {
