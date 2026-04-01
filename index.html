@@ -1303,35 +1303,15 @@ window._fetchPlayerStats = async function(tab) {
       return r.seasonPlayerStats || r.playerList || r.players || r.list || null;
     };
 
-    // 백엔드 프록시 시도
-    try {
-      const proxyUrl = `/api/kboScores?action=playerStats&tab=${type}&teamCode=HT&seasonCode=2026`;
-      const pr = await fetch(proxyUrl);
-      if (pr.ok) {
-        const pd = await pr.json();
-        const extracted = extractPlayers(pd);
-        if (extracted && extracted.length > 0) {
-          players = extracted;
-        } else {
-          console.log('[playerStats] 프록시 응답 구조 확인:', JSON.stringify(pd).slice(0, 300));
-        }
-      }
-    } catch(e) { console.log('[playerStats] 프록시 오류:', e.message); }
-
-    // 직접 호출 fallback
-    if (!players) {
-      const url = `https://api-gw.sports.naver.com/stats/kbo/player-stats?seasonCode=2026&tab=${type}&teamCode=HT&page=1&pageSize=50`;
-      const res = await fetch(url, {
-        headers: {
-          'Referer': 'https://m.sports.naver.com/',
-          'Origin': 'https://m.sports.naver.com',
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
-        }
-      });
-      if (!res.ok) throw new Error('API 오류 ' + res.status);
-      const data = await res.json();
-      players = extractPlayers(data) || [];
+    // 백엔드 프록시 (다중 URL fallback 포함)
+    const proxyUrl = `/api/kboScores?action=playerStats&tab=${type}&teamCode=HT&seasonCode=2026`;
+    const pr = await fetch(proxyUrl);
+    if (!pr.ok) {
+      const errData = await pr.json().catch(() => ({}));
+      throw new Error(errData.error || `서버 오류 ${pr.status}`);
     }
+    const pd = await pr.json();
+    players = extractPlayers(pd) || [];
 
     state.playerStats = { tab, data: players };
   } catch(e) {
