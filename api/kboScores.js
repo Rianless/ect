@@ -233,8 +233,8 @@ export default async function handler(req, res) {
       winPitcher: gameData.winPitcherName || g.winPitcherName || null,
       losePitcher: gameData.losePitcherName || g.losePitcherName || null,
       lineup: detail ? {
-        away: { batter: detail.awayLineup?.batter || [], pitcher: detail.awayLineup?.pitcher || [] },
-        home: { batter: detail.homeLineup?.batter || [], pitcher: detail.homeLineup?.pitcher || [] },
+        away: { batters: detail.awayLineup?.batter || detail.awayLineup?.batters || [], pitcher: detail.awayLineup?.pitcher || [] },
+        home: { batters: detail.homeLineup?.batter || detail.homeLineup?.batters || [], pitcher: detail.homeLineup?.pitcher || [] },
       } : null,
     };
   }
