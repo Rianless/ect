@@ -792,6 +792,7 @@ let state = {
   tab:'cal', dark:false, yr:_kst0.getFullYear(), mo:_kst0.getMonth()+1, sel:_today0,
   lcat:'batting', modalGame:null, modalLt:'away', clock:new Date(),
   memoTab: false, myTab: null, myTabInitialized: false,
+  recordTab: 'game', playerStats: null, playerStatsLoading: false, playerStatsError: null,
 };
 // 중계 전체보기 전역 변수
 let _relayGameId = null, _relayAway = '', _relayHome = '', _relayInn = 1, _relayData = null, _relayInterval = null;
@@ -1285,7 +1286,200 @@ function renderCal(d) {
     <div id="list-section">${listHtml}</div>`;
 }
 
+// ── 선수 기록 fetch (타자/투수) ──
+window._fetchPlayerStats = async function(tab) {
+  state.playerStatsLoading = true;
+  state.playerStatsError = null;
+  render();
+  try {
+    const type = tab === 'hitter' ? 'hitter' : 'pitcher';
+    // 1차: 백엔드 프록시 (/api/kboScores?action=playerStats)
+    // 2차: 네이버 API 직접 호출
+    let players = null;
+
+    // 백엔드 프록시 시도
+    try {
+      const proxyUrl = `/api/kboScores?action=playerStats&tab=${type}&teamCode=HT&seasonCode=2026`;
+      const pr = await fetch(proxyUrl);
+      if (pr.ok) {
+        const pd = await pr.json();
+        if (pd?.result?.seasonPlayerStats) {
+          players = pd.result.seasonPlayerStats;
+        }
+      }
+    } catch(e) {}
+
+    // 직접 호출 fallback
+    if (!players) {
+      const url = `https://api-gw.sports.naver.com/stats/kbo/player-stats?seasonCode=2026&tab=${type}&teamCode=HT&page=1&pageSize=50`;
+      const res = await fetch(url, {
+        headers: {
+          'Referer': 'https://m.sports.naver.com/',
+          'Origin': 'https://m.sports.naver.com',
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+        }
+      });
+      if (!res.ok) throw new Error('API 오류 ' + res.status);
+      const data = await res.json();
+      players = data?.result?.seasonPlayerStats || [];
+    }
+
+    state.playerStats = { tab, data: players };
+  } catch(e) {
+    state.playerStatsError = '데이터를 불러오지 못했어요 😢';
+    state.playerStats = null;
+  }
+  state.playerStatsLoading = false;
+  render();
+};
+
+function renderHitterTable(d, players) {
+  if (!players.length) return '<div style="text-align:center;padding:40px 0;color:'+d.sub+'">선수 데이터가 없어요</div>';
+  const cols = [
+    {key:'playerName',label:'선수',w:'88px'},
+    {key:'hitterHra',label:'타율',w:'52px',fmt:v=>v!=null?Number(v).toFixed(3).replace(/^0/,''):'—'},
+    {key:'hitterHit',label:'안타',w:'38px'},
+    {key:'hitterHr',label:'HR',w:'36px'},
+    {key:'hitterRbi',label:'타점',w:'38px'},
+    {key:'hitterRun',label:'득점',w:'38px'},
+    {key:'hitterObp',label:'출루율',w:'52px',fmt:v=>v!=null?Number(v).toFixed(3).replace(/^0/,''):'—'},
+    {key:'hitterOps',label:'OPS',w:'52px',fmt:v=>v!=null?Number(v).toFixed(3).replace(/^0/,''):'—'},
+  ];
+  let h = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;border-radius:12px;overflow:hidden">';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:360px">';
+  h += '<thead><tr style="background:#E31837">';
+  cols.forEach(c => {
+    h += `<th style="padding:8px 5px;text-align:${c.key==='playerName'?'left':'center'};color:#fff;font-weight:800;font-size:10px;white-space:nowrap;width:${c.w}">${c.label}</th>`;
+  });
+  h += '</tr></thead><tbody>';
+  players.forEach((p, i) => {
+    const bg = i%2===0 ? (d.dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.015)') : 'transparent';
+    const isKia = true; // 이미 KIA 필터
+    h += `<tr style="background:${bg};border-bottom:1px solid ${d.bgB}">`;
+    cols.forEach(c => {
+      const val = p[c.key];
+      const display = c.fmt ? c.fmt(val) : (val!=null?val:'—');
+      const isName = c.key === 'playerName';
+      h += `<td style="padding:8px 5px;text-align:${isName?'left':'center'};color:${isName?d.text:d.sub};font-weight:${isName?'700':'400'};white-space:nowrap">${isName?('<span style="font-size:11px">'+display+'</span>'):display}</td>`;
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+function renderPitcherTable(d, players) {
+  if (!players.length) return '<div style="text-align:center;padding:40px 0;color:'+d.sub+'">선수 데이터가 없어요</div>';
+  // 네이버 API 투수 필드명 — pitcherEra / pitcherWin / pitcherLose / pitcherSv(세이브) / pitcherHld(홀드) / pitcherIp / pitcherKk / pitcherWhip
+  // 실제 필드명은 첫 번째 선수 객체의 키를 검사해 동적으로 매핑
+  const sample = players[0] || {};
+  const sv  = 'pitcherSv'  in sample ? 'pitcherSv'  : ('pitcherSave' in sample ? 'pitcherSave' : 'pitcherSv');
+  const hld = 'pitcherHld' in sample ? 'pitcherHld' : ('pitcherHold' in sample ? 'pitcherHold' : 'pitcherHld');
+  const ip  = 'pitcherIp'  in sample ? 'pitcherIp'  : ('pitcherInning' in sample ? 'pitcherInning' : 'pitcherIp');
+
+  const cols = [
+    {key:'playerName', label:'선수',  w:'88px'},
+    {key:'pitcherEra', label:'ERA',   w:'48px', fmt:v=>v!=null?Number(v).toFixed(2):'—'},
+    {key:'pitcherWin', label:'승',    w:'34px'},
+    {key:'pitcherLose',label:'패',    w:'34px'},
+    {key:sv,           label:'세',    w:'34px'},
+    {key:hld,          label:'홀',    w:'34px'},
+    {key:ip,           label:'이닝',  w:'46px', fmt:v=>v!=null?Number(v).toFixed(1):'—'},
+    {key:'pitcherKk',  label:'K',     w:'34px'},
+    {key:'pitcherWhip',label:'WHIP',  w:'48px', fmt:v=>v!=null?Number(v).toFixed(2):'—'},
+  ];
+  let h = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;border-radius:12px;overflow:hidden">';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:11px;min-width:420px">';
+  h += '<thead><tr style="background:#E31837">';
+  cols.forEach(c => {
+    h += `<th style="padding:8px 5px;text-align:${c.key==='playerName'?'left':'center'};color:#fff;font-weight:800;font-size:10px;white-space:nowrap;width:${c.w}">${c.label}</th>`;
+  });
+  h += '</tr></thead><tbody>';
+  players.forEach((p, i) => {
+    const bg = i%2===0 ? (d.dark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.015)') : 'transparent';
+    h += `<tr style="background:${bg};border-bottom:1px solid ${d.bgB}">`;
+    cols.forEach(c => {
+      const val = p[c.key];
+      const display = c.fmt ? c.fmt(val) : (val!=null?val:'—');
+      const isName = c.key === 'playerName';
+      h += `<td style="padding:8px 5px;text-align:${isName?'left':'center'};color:${isName?d.text:d.sub};font-weight:${isName?'700':'400'};white-space:nowrap">${isName?('<span style="font-size:11px">'+display+'</span>'):display}</td>`;
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
 function renderBaseballRecord(d) {
+  const rt = state.recordTab || 'game';
+
+  // ── 서브탭 헤더 ──
+  let html = '<div style="display:flex;gap:6px;margin-bottom:16px;background:'+d.card+';border-radius:14px;padding:4px">';
+  const tabs = [
+    {id:'game', label:'⚾ 경기기록'},
+    {id:'hitter', label:'🏏 타자'},
+    {id:'pitcher', label:'⚡ 투수'},
+  ];
+  tabs.forEach(t => {
+    const active = rt === t.id;
+    html += `<button onclick="window._setRecordTab('${t.id}')" style="flex:1;padding:8px 4px;border:none;border-radius:10px;font-size:12px;font-weight:${active?'800':'600'};font-family:'Noto Sans KR',sans-serif;cursor:pointer;background:${active?'#E31837':'transparent'};color:${active?'#fff':d.sub};transition:all 0.15s">${t.label}</button>`;
+  });
+  html += '</div>';
+
+  if (rt === 'game') {
+    html += _renderGameRecord(d);
+    return html;
+  }
+
+  // ── 선수 기록 탭 ──
+  if (state.playerStatsLoading) {
+    html += '<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:32px;margin-bottom:12px;animation:spin 1s linear infinite;display:inline-block">⚾</div>'
+      + '<div style="font-size:13px;color:'+d.sub+';margin-top:8px">불러오는 중...</div></div>';
+    return html;
+  }
+
+  if (state.playerStatsError) {
+    html += '<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:40px;margin-bottom:12px">😢</div>'
+      + '<div style="font-size:14px;font-weight:700;color:'+d.text+'">'+state.playerStatsError+'</div>'
+      + '<button onclick="window._fetchPlayerStats(\''+rt+'\')" style="margin-top:16px;padding:10px 24px;background:#E31837;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:\'Noto Sans KR\',sans-serif;cursor:pointer">다시 시도</button>'
+      + '</div>';
+    return html;
+  }
+
+  if (!state.playerStats || state.playerStats.tab !== rt) {
+    // 데이터 없으면 자동 fetch
+    setTimeout(() => window._fetchPlayerStats(rt), 0);
+    html += '<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:32px;margin-bottom:12px;animation:spin 1s linear infinite;display:inline-block">⚾</div>'
+      + '<div style="font-size:13px;color:'+d.sub+';margin-top:8px">불러오는 중...</div></div>';
+    return html;
+  }
+
+  const players = state.playerStats.data;
+  html += '<div style="font-size:11px;color:'+d.sub+';margin-bottom:10px;text-align:right">2026 시즌 · KIA 타이거즈 <button onclick="window._fetchPlayerStats(\''+rt+'\')" style="margin-left:6px;background:none;border:1px solid '+d.bgB+';border-radius:6px;padding:2px 8px;font-size:10px;color:'+d.sub+';font-family:\'Noto Sans KR\',sans-serif;cursor:pointer">🔄 새로고침</button></div>';
+
+  if (rt === 'hitter') {
+    html += renderHitterTable(d, players);
+  } else {
+    html += renderPitcherTable(d, players);
+  }
+
+  return html;
+}
+
+window._setRecordTab = function(t) {
+  state.recordTab = t;
+  // 탭 전환 시 기존 데이터 지우고 새로 fetch
+  if (t !== 'game') {
+    state.playerStats = null;
+    state.playerStatsError = null;
+  }
+  render();
+};
+
+function _renderGameRecord(d) {
   const kiaGames = SCH.filter(g =>
     g.status === 'FINAL' && (g.away === 'KIA' || g.home === 'KIA')
   ).sort((a,b) => b.date.localeCompare(a.date));
@@ -1298,7 +1492,7 @@ function renderBaseballRecord(d) {
       + '</div>';
   }
 
-  let html = '<div style="font-size:13px;font-weight:800;color:'+d.text+';margin-bottom:16px">⚾ 경기 기록 <span style="font-size:11px;color:'+d.sub+';font-weight:400">'+kiaGames.length+'경기</span></div>';
+  let html = '<div style="font-size:13px;font-weight:800;color:'+d.text+';margin-bottom:16px">경기 기록 <span style="font-size:11px;color:'+d.sub+';font-weight:400">'+kiaGames.length+'경기</span></div>';
 
   kiaGames.forEach(function(g) {
     const isHome = g.home === 'KIA';
@@ -1452,6 +1646,7 @@ function renderBaseballRecord(d) {
 
   return html;
 }
+// _renderGameRecord 끝 (renderBaseballRecord에서 호출됨)
 
 window.saveRecordMemoEl = function(el) {
   const date = el.dataset.date, away = el.dataset.away, home = el.dataset.home;
