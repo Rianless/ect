@@ -284,42 +284,38 @@ export default async function handler(req, res) {
         return r.seasonPlayerStats || r.playerList || r.players || r.list || null;
       };
 
-      const NAVER_URLS = [
-        `https://api-gw.sports.naver.com/stats/kbo/player-stats?seasonCode=${seasonCode}&tab=${tab}&teamCode=${teamCode}&page=1&pageSize=50`,
-        `https://m.sports.naver.com/api/kbaseball/stats/player?seasonCode=${seasonCode}&tab=${tab}&teamCode=${teamCode}&page=1&pageSize=50`,
-      ];
-      const NAVER_HEADERS = [
-        {
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-          'Referer': 'https://m.sports.naver.com/kbaseball/record/index',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'ko-KR,ko;q=0.9',
-          'x-requested-with': 'XMLHttpRequest',
-        },
-        {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Referer': 'https://sports.naver.com/kbaseball/record/index',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'ko-KR,ko;q=0.9',
-        },
-      ];
+      // Vercel 10초 타임아웃 대비 — 소스당 timeout 설정
+      const fetchWithTimeout = (url, opts, ms) => {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), ms);
+        return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(tid));
+      };
 
       let players = null;
       let lastErr = '';
 
-      // 네이버 JSON API 시도
-      outer:
-      for (const headers of NAVER_HEADERS) {
-        for (const url of NAVER_URLS) {
-          try {
-            const r = await fetch(url, { headers });
-            console.log(`[playerStats/naver] ${url.split('?')[0]} → ${r.status}`);
-            if (!r.ok) { lastErr = `naver:${r.status}`; continue; }
-            const data = await r.json();
-            const p = extractNaverPlayers(data);
-            if (p && p.length > 0) { players = p; break outer; }
-          } catch(e) { lastErr = `naver:${e.message}`; }
+      // 네이버 1회만 빠르게 시도 (2.5초 제한)
+      try {
+        const naverUrl = `https://api-gw.sports.naver.com/stats/kbo/player-stats?seasonCode=${seasonCode}&tab=${tab}&teamCode=${teamCode}&page=1&pageSize=50`;
+        const r = await fetchWithTimeout(naverUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15',
+            'Referer': 'https://m.sports.naver.com/kbaseball/record/index',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'ko-KR,ko;q=0.9',
+          }
+        }, 2500);
+        console.log(`[playerStats/naver] -> ${r.status}`);
+        if (r.ok) {
+          const data = await r.json();
+          const p = extractNaverPlayers(data);
+          if (p && p.length > 0) players = p;
+        } else {
+          lastErr = `naver:${r.status}`;
         }
+      } catch(e) {
+        lastErr = `naver:${(e.message||'').slice(0,30)}`;
+        console.log(`[playerStats/naver] error: ${(e.message||'').slice(0,60)}`);
       }
 
       // ── 소스 2: KBO 공식 WebService ASMX (서버사이드 JSON) ──
@@ -338,7 +334,7 @@ export default async function handler(req, res) {
             orderBy: 'DESC',
             searchName: '',
           });
-          const ra = await fetch(asmxUrl, {
+          const ra = await fetchWithTimeout(asmxUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -352,7 +348,7 @@ export default async function handler(req, res) {
               'Origin': 'https://www.koreabaseball.com',
             },
             body: asmxBody.toString(),
-          });
+          }, 3500);
           console.log(`[playerStats/asmx] ${asmxMethod} → ${ra.status}`);
           if (ra.ok) {
             const ct = ra.headers.get('content-type') || '';
@@ -421,7 +417,7 @@ export default async function handler(req, res) {
           const teamKor = teMap[teamCode] || teamCode;
           // 스탯티즈 PHP stat은 서버사이드 렌더링이라 직접 파싱 가능
           const statizUrl = `https://www.statiz.co.kr/stat.php?opt=0&sopt=0&re=0&ys=${seasonCode}&ye=${seasonCode}&se=0&te=${encodeURIComponent(teamKor)}&tm=&ty=0&qu=auto&po=0&as=&ae=&hi=&un=&pl=&da=1&o1=${isHitter?'HRA_CN':'ERA_CN'}&o2=&de=1&lr=0&tr=&cv=&ml=1&sn=50&si=&cn=50`;
-          const rs = await fetch(statizUrl, {
+          const rs = await fetchWithTimeout(statizUrl, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
               'Referer': 'https://www.statiz.co.kr/stat.php',
@@ -429,7 +425,7 @@ export default async function handler(req, res) {
               'Accept-Language': 'ko-KR,ko;q=0.9',
               'Cookie': 'statiz_lang=ko',
             }
-          });
+          }, 3500);
           console.log(`[playerStats/statiz] → ${rs.status}`);
           if (rs.ok) {
             const html = await rs.text();
