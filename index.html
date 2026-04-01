@@ -3543,7 +3543,7 @@ function renderRelayText(relays, away, home) {
           const stuffColor = stuff==='직구'||stuff==='투심'?'#E31837': stuff==='슬라이더'||stuff==='커터'?'#0078ff': stuff==='커브'||stuff==='너클커브'?'#9C27B0': stuff==='포크'||stuff==='체인지업'?'#FF6600': '#555';
           return ` <span style="font-size:11px;font-weight:700;color:${stuffColor};background:${stuffColor}18;border:1px solid ${stuffColor}44;border-radius:4px;padding:1px 5px;margin-left:4px">${stuff}${speed?' '+speed:''}</span>`;
         })()}</div>
-        ${scoreDisp?`<div style="margin-top:3px">${scoreDisp}</div>`:''}`
+        ${scoreDisp?`<div style="margin-top:3px">${scoreDisp}</div>`:''}
       </div>
     </div>`;
   }).join('');
