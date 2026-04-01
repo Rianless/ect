@@ -276,63 +276,212 @@ export default async function handler(req, res) {
       const tab = req.query.tab || 'hitter';
       const teamCode = req.query.teamCode || 'HT';
       const seasonCode = req.query.seasonCode || '2026';
+      const isHitter = tab === 'hitter';
 
-      // 네이버 API 응답에서 선수 배열 추출 (다양한 필드명 커버)
-      const extractPlayers = (data) => {
+      // ── 소스 1: 네이버 API (JSON) ──
+      const extractNaverPlayers = (data) => {
         const r = data?.result || {};
         return r.seasonPlayerStats || r.playerList || r.players || r.list || null;
       };
 
-      // 시도할 URL 목록 (403 우회용 다중 엔드포인트)
-      const STAT_URLS = [
-        // PC 웹 API
+      const NAVER_URLS = [
         `https://api-gw.sports.naver.com/stats/kbo/player-stats?seasonCode=${seasonCode}&tab=${tab}&teamCode=${teamCode}&page=1&pageSize=50`,
-        // 모바일 API v2
         `https://m.sports.naver.com/api/kbaseball/stats/player?seasonCode=${seasonCode}&tab=${tab}&teamCode=${teamCode}&page=1&pageSize=50`,
-        // 구버전 엔드포인트
-        `https://sports.news.naver.com/kbaseball/stats/index.nhn?type=${tab}&teamCode=${teamCode}&year=${seasonCode}`,
       ];
-
-      const HEADER_SETS = [
-        // 모바일 UA
+      const NAVER_HEADERS = [
         {
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-          'Referer': 'https://m.sports.naver.com/kbaseball/stats/team',
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+          'Referer': 'https://m.sports.naver.com/kbaseball/record/index',
           'Accept': 'application/json, text/plain, */*',
           'Accept-Language': 'ko-KR,ko;q=0.9',
-          'Origin': 'https://m.sports.naver.com',
+          'x-requested-with': 'XMLHttpRequest',
         },
-        // PC UA
         {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Referer': 'https://sports.naver.com/kbaseball/stats/team',
+          'Referer': 'https://sports.naver.com/kbaseball/record/index',
           'Accept': 'application/json, text/plain, */*',
           'Accept-Language': 'ko-KR,ko;q=0.9',
-          'Origin': 'https://sports.naver.com',
         },
       ];
 
       let players = null;
       let lastErr = '';
 
+      // 네이버 JSON API 시도
       outer:
-      for (const headers of HEADER_SETS) {
-        for (const url of STAT_URLS) {
+      for (const headers of NAVER_HEADERS) {
+        for (const url of NAVER_URLS) {
           try {
             const r = await fetch(url, { headers });
-            console.log(`[playerStats] ${url.split('?')[0]} → ${r.status}`);
-            if (!r.ok) { lastErr = `${r.status}`; continue; }
+            console.log(`[playerStats/naver] ${url.split('?')[0]} → ${r.status}`);
+            if (!r.ok) { lastErr = `naver:${r.status}`; continue; }
             const data = await r.json();
-            const p = extractPlayers(data);
+            const p = extractNaverPlayers(data);
             if (p && p.length > 0) { players = p; break outer; }
-            console.log('[playerStats] 응답 필드:', JSON.stringify(Object.keys(data?.result||data||{})));
-          } catch(e) { lastErr = e.message; }
+          } catch(e) { lastErr = `naver:${e.message}`; }
+        }
+      }
+
+      // ── 소스 2: KBO 공식 사이트 HTML 파싱 ──
+      if (!players) {
+        try {
+          // KBO 공식 선수 기록 페이지 (타자/투수)
+          const kboPath = isHitter
+            ? `https://www.koreabaseball.com/Record/Player/HitterBasic/BasicRecord.aspx?leagueId=1&teamCode=${teamCode}&sort=HRA_CN`
+            : `https://www.koreabaseball.com/Record/Player/PitcherBasic/BasicRecord.aspx?leagueId=1&teamCode=${teamCode}&sort=ERA_CN`;
+
+          const kboHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Referer': 'https://www.koreabaseball.com/',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'ko-KR,ko;q=0.9',
+          };
+          const r = await fetch(kboPath, { headers: kboHeaders });
+          console.log(`[playerStats/kbo] → ${r.status}`);
+          if (r.ok) {
+            const html = await r.text();
+            // HTML 테이블에서 선수 데이터 파싱
+            players = isHitter
+              ? parseKboHitterTable(html)
+              : parseKboPitcherTable(html);
+            if (players && players.length > 0) {
+              console.log(`[playerStats/kbo] parsed ${players.length} players`);
+            } else {
+              lastErr += ' kbo:empty';
+              players = null;
+            }
+          } else {
+            lastErr += ` kbo:${r.status}`;
+          }
+        } catch(e) {
+          lastErr += ` kbo:${e.message}`;
+        }
+      }
+
+      // ── 소스 3: 스탯티즈 HTML 파싱 ──
+      if (!players) {
+        try {
+          const teMap = { HT:'KIA', KT:'KT', LG:'LG', SK:'SSG', NC:'NC', OB:'두산', LT:'롯데', SS:'삼성', HH:'한화', WO:'키움' };
+          const teamKor = teMap[teamCode] || teamCode;
+          const statizType = isHitter ? '0' : '1';
+          const statizUrl = `https://www.statiz.co.kr/stat.php?opt=0&sopt=0&re=0&ys=${seasonCode}&ye=${seasonCode}&se=0&te=${teamKor}&tm=&ty=0&qu=auto&po=0&as=&ae=&hi=&un=&pl=&da=1&o1=${isHitter?'HRA':'ERA'}&o2=&de=1&lr=0&tr=&cv=&ml=1&sn=50&si=&cn=50`;
+          const r = await fetch(statizUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+              'Referer': 'https://www.statiz.co.kr/',
+              'Accept-Language': 'ko-KR,ko;q=0.9',
+            }
+          });
+          console.log(`[playerStats/statiz] → ${r.status}`);
+          if (r.ok) {
+            const html = await r.text();
+            players = isHitter
+              ? parseStatizHitterTable(html)
+              : parseStatizPitcherTable(html);
+            if (players && players.length > 0) {
+              console.log(`[playerStats/statiz] parsed ${players.length} players`);
+            } else {
+              lastErr += ' statiz:empty';
+              players = null;
+            }
+          } else {
+            lastErr += ` statiz:${r.status}`;
+          }
+        } catch(e) {
+          lastErr += ` statiz:${e.message}`;
         }
       }
 
       if (!players) return res.status(502).json({ error: `선수 데이터를 가져오지 못했어요 (${lastErr})` });
 
       return res.status(200).json({ result: { seasonPlayerStats: players } });
+    }
+
+    // ── HTML 파싱 헬퍼 함수들 ──
+    function _stripTags(html) { return html.replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ').trim(); }
+
+    function _parseTableRows(html, tableSelector) {
+      // tbody 내의 tr 추출
+      const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+      if (!tbodyMatch) return [];
+      const tbody = tbodyMatch[1];
+      const rows = [];
+      const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      let trM;
+      while ((trM = trRe.exec(tbody)) !== null) {
+        const cells = [];
+        const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+        let tdM;
+        while ((tdM = tdRe.exec(trM[1])) !== null) {
+          cells.push(_stripTags(tdM[1]));
+        }
+        if (cells.length > 3) rows.push(cells);
+      }
+      return rows;
+    }
+
+    function parseKboHitterTable(html) {
+      const rows = _parseTableRows(html);
+      return rows.map(c => ({
+        playerName: c[1] || c[0] || '',
+        hitterGame: c[2] || '',
+        hitterHra: c[3] || '',   // 타율
+        hitterHit: c[7] || '',   // 안타
+        hitterHr:  c[10] || '',  // 홈런
+        hitterRbi: c[11] || '',  // 타점
+        hitterRun: c[9] || '',   // 득점
+        hitterObp: c[13] || '',  // 출루율
+        hitterOps: c[15] || '',  // OPS
+      })).filter(p => p.playerName && p.playerName !== '선수명');
+    }
+
+    function parseKboPitcherTable(html) {
+      const rows = _parseTableRows(html);
+      return rows.map(c => ({
+        playerName:  c[1] || c[0] || '',
+        pitcherGame: c[2] || '',
+        pitcherEra:  c[3] || '',  // ERA
+        pitcherWin:  c[4] || '',  // 승
+        pitcherLose: c[5] || '',  // 패
+        pitcherSv:   c[6] || '',  // 세이브
+        pitcherHld:  c[7] || '',  // 홀드
+        pitcherIp:   c[9] || '',  // 이닝
+        pitcherKk:   c[14] || '', // 탈삼진
+        pitcherWhip: c[17] || '', // WHIP
+      })).filter(p => p.playerName && p.playerName !== '선수명');
+    }
+
+    function parseStatizHitterTable(html) {
+      // 스탯티즈 테이블 파싱 (컬럼: 순위, 선수, 팀, G, PA, AB, H, 2B, 3B, HR, R, RBI, BB, HBP, SO, SB, AVG, OBP, SLG, OPS, ...)
+      const rows = _parseTableRows(html);
+      return rows.map(c => ({
+        playerName: c[1] || '',
+        hitterGame: c[3] || '',
+        hitterHra:  c[16] || '', // AVG
+        hitterHit:  c[6] || '',  // H
+        hitterHr:   c[9] || '',  // HR
+        hitterRbi:  c[11] || '', // RBI
+        hitterRun:  c[10] || '', // R
+        hitterObp:  c[17] || '', // OBP
+        hitterOps:  c[19] || '', // OPS
+      })).filter(p => p.playerName && !/^[0-9]+$/.test(p.playerName) && p.playerName !== '선수');
+    }
+
+    function parseStatizPitcherTable(html) {
+      // 스탯티즈 투수 테이블 (컬럼: 순위, 선수, 팀, G, W, L, SV, HLD, IP, H, HR, BB, HBP, SO, ERA, WHIP, ...)
+      const rows = _parseTableRows(html);
+      return rows.map(c => ({
+        playerName:  c[1] || '',
+        pitcherGame: c[3] || '',
+        pitcherWin:  c[4] || '',  // W
+        pitcherLose: c[5] || '',  // L
+        pitcherSv:   c[6] || '',  // SV
+        pitcherHld:  c[7] || '',  // HLD
+        pitcherIp:   c[8] || '',  // IP
+        pitcherKk:   c[13] || '', // SO
+        pitcherEra:  c[14] || '', // ERA
+        pitcherWhip: c[15] || '', // WHIP
+      })).filter(p => p.playerName && !/^[0-9]+$/.test(p.playerName) && p.playerName !== '선수');
     }
 
     if (gameId && action === 'lineup') {
