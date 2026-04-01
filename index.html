@@ -2055,8 +2055,8 @@ function renderModal(d) {
   const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
 
   // 이닝 스코어 테이블
-  const lInn = lTeam===g.away ? g.awayInnings : g.homeInnings;
-  const rInn = rTeam===g.away ? g.awayInnings : g.homeInnings;
+  const lInn = (lTeam===g.away ? g.awayInnings : g.homeInnings) || Array(9).fill(-1);
+  const rInn = (rTeam===g.away ? g.awayInnings : g.homeInnings) || Array(9).fill(-1);
   // LIVE/FINAL이면 스코어나 이닝 배열 중 하나라도 있으면 표시
   const hasInn = !isSch && lInn && (
     lInn.some(x=>x>=0) ||
