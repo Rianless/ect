@@ -278,13 +278,7 @@ export default async function handler(req, res) {
       const seasonCode = req.query.seasonCode || '2026';
       const isHitter = tab === 'hitter';
 
-      // ── 소스 1: 네이버 API (JSON) ──
-      const extractNaverPlayers = (data) => {
-        const r = data?.result || {};
-        return r.seasonPlayerStats || r.playerList || r.players || r.list || null;
-      };
-
-      // Vercel 10초 타임아웃 대비 — 소스당 timeout 설정
+      // ── 소스 1: KBO 공식 ASMX WebService ──
       const fetchWithTimeout = (url, opts, ms) => {
         const ctrl = new AbortController();
         const tid = setTimeout(() => ctrl.abort(), ms);
@@ -294,160 +288,122 @@ export default async function handler(req, res) {
       let players = null;
       let lastErr = '';
 
-      // 네이버 1회만 빠르게 시도 (2.5초 제한)
+      // ASMX 시도 (4초 제한)
       try {
-        const naverUrl = `https://api-gw.sports.naver.com/stats/kbo/player-stats?seasonCode=${seasonCode}&tab=${tab}&teamCode=${teamCode}&page=1&pageSize=50`;
-        const r = await fetchWithTimeout(naverUrl, {
+        const asmxMethod = isHitter ? 'GetHitterBasicRecordList' : 'GetPitcherBasicRecordList';
+        const asmxUrl = `https://www.koreabaseball.com/ws/Record.asmx/${asmxMethod}`;
+        const asmxBody = new URLSearchParams({
+          leagueId: '1', srId: '', teamCode: teamCode,
+          pageNum: '1', pageSize: '50',
+          sortKey: isHitter ? 'HRA_CN' : 'ERA_CN',
+          orderBy: 'DESC', searchName: '',
+        });
+        console.log(`[playerStats/asmx] trying ${asmxMethod}`);
+        const ra = await fetchWithTimeout(asmxUrl, {
+          method: 'POST',
           headers: {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15',
-            'Referer': 'https://m.sports.naver.com/kbaseball/record/index',
-            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://www.koreabaseball.com/Record/Player/HitterBasic/BasicRecord.aspx',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
             'Accept-Language': 'ko-KR,ko;q=0.9',
+            'Origin': 'https://www.koreabaseball.com',
+          },
+          body: asmxBody.toString(),
+        }, 4000);
+        console.log(`[playerStats/asmx] status=${ra.status}`);
+        if (ra.ok) {
+          const raw = await ra.text();
+          console.log(`[playerStats/asmx] raw(200)=${raw.slice(0,200)}`);
+          let parsed = null;
+          try { parsed = JSON.parse(raw); } catch(e) {
+            // XML 래핑 처리: <string ...>JSON</string>
+            const m = raw.match(/<string[^>]*>([\s\S]*?)<\/string>/i);
+            if (m) { try { parsed = JSON.parse(m[1]); } catch(e2) {} }
           }
-        }, 2500);
-        console.log(`[playerStats/naver] -> ${r.status}`);
-        if (r.ok) {
-          const data = await r.json();
-          const p = extractNaverPlayers(data);
-          if (p && p.length > 0) players = p;
-        } else {
-          lastErr = `naver:${r.status}`;
-        }
-      } catch(e) {
-        lastErr = `naver:${(e.message||'').slice(0,30)}`;
-        console.log(`[playerStats/naver] error: ${(e.message||'').slice(0,60)}`);
-      }
-
-      // ── 소스 2: KBO 공식 WebService ASMX (서버사이드 JSON) ──
-      if (!players) {
-        try {
-          // KBO 공식 사이트 내부 ASMX 웹서비스 — JS 렌더링 없이 서버에서 직접 데이터 반환
-          const asmxMethod = isHitter ? 'GetHitterBasicRecordList' : 'GetPitcherBasicRecordList';
-          const asmxUrl = `https://www.koreabaseball.com/ws/Record.asmx/${asmxMethod}`;
-          const asmxBody = new URLSearchParams({
-            leagueId: '1',
-            srId: '',
-            teamCode: teamCode,
-            pageNum: '1',
-            pageSize: '50',
-            sortKey: isHitter ? 'HRA_CN' : 'ERA_CN',
-            orderBy: 'DESC',
-            searchName: '',
-          });
-          const ra = await fetchWithTimeout(asmxUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              'Referer': isHitter
-                ? 'https://www.koreabaseball.com/Record/Player/HitterBasic/BasicRecord.aspx'
-                : 'https://www.koreabaseball.com/Record/Player/PitcherBasic/BasicRecord.aspx',
-              'X-Requested-With': 'XMLHttpRequest',
-              'Accept': 'application/json, text/javascript, */*; q=0.01',
-              'Accept-Language': 'ko-KR,ko;q=0.9',
-              'Origin': 'https://www.koreabaseball.com',
-            },
-            body: asmxBody.toString(),
-          }, 3500);
-          console.log(`[playerStats/asmx] ${asmxMethod} → ${ra.status}`);
-          if (ra.ok) {
-            const ct = ra.headers.get('content-type') || '';
-            const raw = await ra.text();
-            // ASMX는 JSON 또는 XML로 응답할 수 있음
-            let parsed = null;
-            if (ct.includes('json') || raw.trim().startsWith('{') || raw.trim().startsWith('[')) {
-              try { parsed = JSON.parse(raw); } catch(e) {}
-            }
-            // XML 형태면 간단 파싱
-            if (!parsed && raw.includes('<string')) {
-              const inner = raw.replace(/<\/?string[^>]*>/g, '').trim();
-              try { parsed = JSON.parse(inner); } catch(e) {}
-            }
-            if (parsed) {
-              // 응답 구조 탐색
-              const arr = Array.isArray(parsed) ? parsed
-                : parsed.d ? (Array.isArray(parsed.d) ? parsed.d : null)
-                : parsed.list || parsed.data || parsed.result || null;
-              if (arr && arr.length > 0) {
-                players = isHitter ? arr.map(p => ({
-                  playerName: p.PLAYER_NAME || p.playerName || p.name || '',
-                  hitterGame:  p.G_CN || p.gameCount || '',
-                  hitterHra:   p.HRA || p.BA || p.hitterHra || '',
-                  hitterHit:   p.H_CN || p.hits || p.hitterHit || '',
-                  hitterHr:    p.HR_CN || p.homeRuns || p.hitterHr || '',
-                  hitterRbi:   p.RBI_CN || p.rbi || p.hitterRbi || '',
-                  hitterRun:   p.R_CN || p.runs || p.hitterRun || '',
-                  hitterObp:   p.OBP || p.onBase || p.hitterObp || '',
-                  hitterOps:   p.OPS || p.hitterOps || '',
-                })) : arr.map(p => ({
-                  playerName:  p.PLAYER_NAME || p.playerName || p.name || '',
-                  pitcherGame: p.G_CN || p.gameCount || '',
-                  pitcherEra:  p.ERA || p.pitcherEra || '',
-                  pitcherWin:  p.W_CN || p.wins || p.pitcherWin || '',
-                  pitcherLose: p.L_CN || p.losses || p.pitcherLose || '',
-                  pitcherSv:   p.SV_CN || p.saves || p.pitcherSv || '',
-                  pitcherHld:  p.HLD_CN || p.holds || p.pitcherHld || '',
-                  pitcherIp:   p.IP || p.innings || p.pitcherIp || '',
-                  pitcherKk:   p.KK_CN || p.strikeouts || p.pitcherKk || '',
-                  pitcherWhip: p.WHIP || p.pitcherWhip || '',
-                }));
-                players = players.filter(p => p.playerName);
-                if (!players.length) { lastErr += ' asmx:empty_map'; players = null; }
-                else console.log(`[playerStats/asmx] mapped ${players.length} players`);
-              } else {
-                lastErr += ' asmx:no_arr';
-                console.log('[playerStats/asmx] parsed but no array. keys:', JSON.stringify(Object.keys(parsed||{})));
-              }
+          if (parsed) {
+            const arr = Array.isArray(parsed) ? parsed
+              : (parsed.d ? (Array.isArray(parsed.d) ? parsed.d : null) : null)
+              || parsed.list || parsed.data || parsed.result || null;
+            console.log(`[playerStats/asmx] arr=${arr ? arr.length : 'null'} keys=${JSON.stringify(Object.keys(parsed||{})).slice(0,80)}`);
+            if (arr && arr.length > 0) {
+              players = isHitter ? arr.map(p => ({
+                playerName: p.PLAYER_NAME||p.playerName||p.name||'',
+                hitterGame:  p.G_CN||p.gameCount||'',
+                hitterHra:   p.HRA||p.BA||p.AVG||'',
+                hitterHit:   p.H_CN||p.hits||'',
+                hitterHr:    p.HR_CN||p.homeRuns||'',
+                hitterRbi:   p.RBI_CN||p.rbi||'',
+                hitterRun:   p.R_CN||p.runs||'',
+                hitterObp:   p.OBP||p.onBase||'',
+                hitterOps:   p.OPS||'',
+              })) : arr.map(p => ({
+                playerName:  p.PLAYER_NAME||p.playerName||p.name||'',
+                pitcherGame: p.G_CN||p.gameCount||'',
+                pitcherEra:  p.ERA||'',
+                pitcherWin:  p.W_CN||p.wins||'',
+                pitcherLose: p.L_CN||p.losses||'',
+                pitcherSv:   p.SV_CN||p.saves||'',
+                pitcherHld:  p.HLD_CN||p.holds||'',
+                pitcherIp:   p.IP||p.innings||'',
+                pitcherKk:   p.KK_CN||p.strikeouts||'',
+                pitcherWhip: p.WHIP||'',
+              }));
+              players = players.filter(p => p.playerName);
+              if (!players.length) { lastErr='asmx:empty_map'; players=null; }
+              else console.log(`[playerStats/asmx] mapped ${players.length} players OK`);
             } else {
-              lastErr += ' asmx:parse_fail';
-              console.log('[playerStats/asmx] raw (first 300):', raw.slice(0,300));
+              lastErr = `asmx:no_arr keys=${JSON.stringify(Object.keys(parsed||{}))}`;
             }
           } else {
-            lastErr += ` asmx:${ra.status}`;
+            lastErr = `asmx:parse_fail raw=${raw.slice(0,100)}`;
           }
-        } catch(e) {
-          lastErr += ` asmx:${e.message}`;
+        } else {
+          lastErr = `asmx:${ra.status}`;
         }
+      } catch(e) {
+        lastErr = `asmx:${(e.message||'err').slice(0,60)}`;
+        console.log(`[playerStats/asmx] exception: ${e.message}`);
       }
 
-      // ── 소스 3: 스탯티즈 PHP (서버사이드 HTML) ──
+      // ── 소스 2: 스탯티즈 HTML 파싱 ──
       if (!players) {
+        console.log(`[playerStats/statiz] trying (lastErr so far: ${lastErr})`);
         try {
           const teMap = { HT:'KIA', KT:'KT', LG:'LG', SK:'SSG', NC:'NC', OB:'두산', LT:'롯데', SS:'삼성', HH:'한화', WO:'키움' };
           const teamKor = teMap[teamCode] || teamCode;
-          // 스탯티즈 PHP stat은 서버사이드 렌더링이라 직접 파싱 가능
           const statizUrl = `https://www.statiz.co.kr/stat.php?opt=0&sopt=0&re=0&ys=${seasonCode}&ye=${seasonCode}&se=0&te=${encodeURIComponent(teamKor)}&tm=&ty=0&qu=auto&po=0&as=&ae=&hi=&un=&pl=&da=1&o1=${isHitter?'HRA_CN':'ERA_CN'}&o2=&de=1&lr=0&tr=&cv=&ml=1&sn=50&si=&cn=50`;
           const rs = await fetchWithTimeout(statizUrl, {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
               'Referer': 'https://www.statiz.co.kr/stat.php',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept': 'text/html,application/xhtml+xml',
               'Accept-Language': 'ko-KR,ko;q=0.9',
               'Cookie': 'statiz_lang=ko',
             }
-          }, 3500);
-          console.log(`[playerStats/statiz] → ${rs.status}`);
+          }, 4000);
+          console.log(`[playerStats/statiz] status=${rs.status}`);
           if (rs.ok) {
             const html = await rs.text();
-            players = isHitter
-              ? parseStatizHitterTable(html)
-              : parseStatizPitcherTable(html);
+            console.log(`[playerStats/statiz] html_len=${html.length} has_tbody=${html.includes('<tbody')}`);
+            players = isHitter ? parseStatizHitterTable(html) : parseStatizPitcherTable(html);
             if (players && players.length > 0) {
               console.log(`[playerStats/statiz] parsed ${players.length} players`);
             } else {
               lastErr += ' statiz:empty';
-              console.log('[playerStats/statiz] empty. html length:', html.length, ' has tbody:', html.includes('<tbody'));
               players = null;
             }
           } else {
             lastErr += ` statiz:${rs.status}`;
           }
         } catch(e) {
-          lastErr += ` statiz:${e.message}`;
+          lastErr += ` statiz:${(e.message||'').slice(0,60)}`;
+          console.log(`[playerStats/statiz] exception: ${e.message}`);
         }
       }
 
-      if (!players) return res.status(502).json({ error: `선수 데이터를 가져오지 못했어요 (${lastErr})` });
+            if (!players) return res.status(502).json({ error: `선수 데이터를 가져오지 못했어요 (${lastErr})` });
 
       return res.status(200).json({ result: { seasonPlayerStats: players } });
     }
