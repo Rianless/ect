@@ -271,6 +271,18 @@ export default async function handler(req, res) {
     const inning = req.query.inning ? parseInt(req.query.inning) : null;
     const action = req.query.action || '';
 
+    // ── 선수 기록 (타자/투수) ──
+    if (action === 'playerStats') {
+      const tab = req.query.tab || 'hitter';
+      const teamCode = req.query.teamCode || 'HT';
+      const seasonCode = req.query.seasonCode || '2026';
+      const url = `https://api-gw.sports.naver.com/stats/kbo/player-stats?seasonCode=${seasonCode}&tab=${tab}&teamCode=${teamCode}&page=1&pageSize=50`;
+      const r = await fetch(url, { headers: HEADERS });
+      if (!r.ok) return res.status(r.status).json({ error: `stats ${r.status}` });
+      const data = await r.json();
+      return res.status(200).json(data);
+    }
+
     if (gameId && action === 'lineup') {
       // game-polling으로 textRelayData 포함 전체 응답 가져오기
       const inn = inning || 1;
