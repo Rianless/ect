@@ -239,7 +239,10 @@ export default async function handler(req, res) {
         const homeL = lu.homeLineup || lu.homeTeamLineup || detail.homeLineup || detail.homeTeamLineup || detail.lineup?.home || {};
         const awayBatters = awayL.batter || awayL.batters || awayL.batterList || awayL.players || [];
         const homeBatters = homeL.batter || homeL.batters || homeL.batterList || homeL.players || [];
-        console.log('[lineup debug3] detail top keys:', Object.keys(detail), 'sample:', JSON.stringify(detail).slice(0,400));
+        // game-polling 응답 구조: game, textRelayData, relatedGames
+        const gp = detail.game || {};
+        console.log('[lineup debug4] game keys:', Object.keys(gp).slice(0,20));
+        console.log('[lineup debug4] game sample:', JSON.stringify(gp).slice(0,500));
         if (!awayBatters.length && !homeBatters.length) return null;
         return {
           away: { batters: awayBatters, pitcher: awayL.pitcher || awayL.pitchers || [] },
