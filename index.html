@@ -1877,7 +1877,7 @@ function renderMyPage(d) {
   sections.forEach(s => {
     const isOpen = state.myTab === s.id;
     html += `<div style="${cardStyle};margin-bottom:10px;overflow:hidden;${isOpen?'border-color:#E31837;':''}" >`;
-    html += `<button onclick="state.myTab=state.myTab==='${s.id}'?null:'${s.id}';render();window.scrollTo({top:0,behavior:'instant'})" style="width:100%;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;min-height:${isOpen?'auto':'96px'}">`;
+    html += `<button onclick="state.myTab=state.myTab==='${s.id}'?null:'${s.id}';render()" style="width:100%;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;font-family:'Noto Sans KR',sans-serif;min-height:${isOpen?'auto':'96px'}">`;
     html += `<span style="font-size:15px;font-weight:800;color:${isOpen?'#E31837':d.text}">${s.label}</span>`;
     html += `<span style="font-size:13px;color:${isOpen?'#E31837':d.sub}">${isOpen?'▲':'▼'}</span>`;
     html += `</button>`;
@@ -2679,6 +2679,7 @@ function openGameByKey(el) {
 }
 
 function setTab(t){
+  if(t !== 'my') state.myTab = null; // 마이페이지 벗어나면 카드 모두 닫기
   state.tab=t;
   render();
   window.scrollTo({top:0,behavior:'instant'});
