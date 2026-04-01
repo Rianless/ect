@@ -232,10 +232,19 @@ export default async function handler(req, res) {
       homeStarter,
       winPitcher: gameData.winPitcherName || g.winPitcherName || null,
       losePitcher: gameData.losePitcherName || g.losePitcherName || null,
-      lineup: detail ? {
-        away: { batters: detail.awayLineup?.batter || detail.awayLineup?.batters || [], pitcher: detail.awayLineup?.pitcher || [] },
-        home: { batters: detail.homeLineup?.batter || detail.homeLineup?.batters || [], pitcher: detail.homeLineup?.pitcher || [] },
-      } : null,
+      lineup: detail ? (() => {
+        // 네이버 lineup API 응답 구조 다양하게 커버
+        const awayL = detail.awayLineup || detail.awayTeamLineup || detail.lineup?.away || {};
+        const homeL = detail.homeLineup || detail.homeTeamLineup || detail.lineup?.home || {};
+        const awayBatters = awayL.batter || awayL.batters || awayL.batterList || awayL.players || [];
+        const homeBatters = homeL.batter || homeL.batters || homeL.batterList || homeL.players || [];
+        console.log('[lineup debug] awayBatters:', awayBatters.length, 'homeBatters:', homeBatters.length, 'detail keys:', Object.keys(detail).slice(0,15));
+        if (!awayBatters.length && !homeBatters.length) return null;
+        return {
+          away: { batters: awayBatters, pitcher: awayL.pitcher || awayL.pitchers || [] },
+          home: { batters: homeBatters, pitcher: homeL.pitcher || homeL.pitchers || [] },
+        };
+      })() : null,
     };
   }
 
