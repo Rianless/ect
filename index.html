@@ -2535,16 +2535,14 @@ function renderModal(d) {
             return `<button onclick="saveMemoField('watch','${v}')" style="flex:1;padding:7px 0;background:${sel?'#E31837':'transparent'};border:1.5px solid ${sel?'#E31837':d.bgB};color:${sel?'#fff':d.sub};border-radius:8px;font-size:12px;font-weight:700;font-family:'Noto Sans KR',sans-serif">${v==='직관'?'⚾ 직관':v==='집관'?'📺 집관':'— 미시청'}</button>`;
           }).join('')}
         </div>
-        <textarea id="memo-input" placeholder="이 경기에 대한 생각이나 메모를 남겨보세요 ✍️" style="width:100%;min-height:90px;padding:12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;color:${d.text};font-size:13px;line-height:1.6;resize:none;-webkit-user-select:text;user-select:text">${memoData.text||''}</textarea>
-        <div style="margin-top:8px">
-          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px">
-            <span style="font-size:13px">📷</span>
-            <span style="font-size:12px;color:${d.sub};flex:1">사진 추가 <span style="font-size:10px;color:${d.sub};opacity:0.7">(여러 장 선택 가능)</span></span>
-            <input type="file" accept="image/*" id="memo-photo-input" style="display:none" multiple onchange="saveMemoPhoto(this)"/>
-            <button onclick="document.getElementById('memo-photo-input').click()" style="font-size:11px;color:#E31837;font-weight:700;font-family:'Noto Sans KR',sans-serif;background:none;border:none;cursor:pointer;padding:4px 8px;border:1px solid #E31837;border-radius:6px">선택</button>
-          </div>
-          <div id="memo-photo-preview" style="margin-top:8px"></div>
+        <textarea id="memo-input" placeholder="이 경기에 대한 생각이나 메모를 남겨보세요 ✍️" style="width:100%;min-height:52px;padding:10px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:12px;color:${d.text};font-size:13px;line-height:1.5;resize:none;-webkit-user-select:text;user-select:text">${memoData.text||''}</textarea>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:${d.bg};border:1px solid ${d.bgB};border-radius:10px">
+          <span style="font-size:13px">📷</span>
+          <span style="font-size:12px;color:${d.sub};flex:1">사진 추가 <span style="font-size:10px;color:${d.sub};opacity:0.7">(여러 장 선택 가능)</span></span>
+          <input type="file" accept="image/*" id="memo-photo-input" style="display:none" multiple onchange="saveMemoPhoto(this)"/>
+          <button onclick="document.getElementById('memo-photo-input').click()" style="font-size:11px;color:#E31837;font-weight:700;font-family:'Noto Sans KR',sans-serif;background:none;border:none;cursor:pointer;padding:4px 8px;border:1px solid #E31837;border-radius:6px">선택</button>
         </div>
+        <div id="memo-photo-preview" style="margin-top:8px"></div>
         <button onclick="closeModal()" style="width:100%;margin-top:14px;padding:14px;background:#E31837;color:#fff;border-radius:12px;font-size:15px;font-weight:800;font-family:'Noto Sans KR',sans-serif;border:none;cursor:pointer">✓ 완료</button>
       </div>
     </div>`;
