@@ -2040,7 +2040,7 @@ function renderModal(d) {
   const isSch=!g.status||g.status==='BEFORE'||g.status==='SCHEDULED';
   const hasLU=!!g.lineup;
   const lt=state.modalLt;
-  const cur=buildDisplayLineup(lt==='away'?(g.lineup?.away?.batters||[]):(g.lineup?.home?.batters||[]));
+  const cur=buildDisplayLineup(lt==='away'?(g.lineup?.away?.batter||g.lineup?.away?.batters||[]):(g.lineup?.home?.batter||g.lineup?.home?.batters||[]));
   const ct=lt==='away'?aw:hw;
   const kiaHome=g.home==='KIA';
   const lTeam=kiaHome?g.home:g.away, rTeam=kiaHome?g.away:g.home;
@@ -4251,6 +4251,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
-
-
