@@ -11,7 +11,8 @@ const YEAR = new Date().getFullYear();
 async function fetchStatiz(type) {
   // type: 'HRA_CN' (타자), 'ERA_CN' (투수)
   const isHitter = type === 'HRA_CN';
-  const url = `https://www.statiz.co.kr/stat.php?opt=0&sopt=0&re=0&ys=${YEAR}&ye=${YEAR}&se=0&te=KIA&tm=&ty=0&qu=auto&po=0&as=&ae=&hi=&un=&pl=&da=1&o1=${type}&o2=&de=1&lr=0&tr=&cv=&ml=1&sn=50&si=&cn=50`;
+  const teamParam = encodeURIComponent('KIA 타이거즈');
+  const url = `https://www.statiz.co.kr/stat.php?opt=0&sopt=0&re=0&ys=${YEAR}&ye=${YEAR}&se=0&te=${teamParam}&tm=&ty=0&qu=auto&po=0&as=&ae=&hi=&un=&pl=&da=1&o1=${type}&o2=&de=1&lr=0&tr=&cv=&ml=1&sn=50&si=&cn=50`;
 
   const res = await fetch(url, {
     headers: {
@@ -95,4 +96,3 @@ async function main() {
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
-
