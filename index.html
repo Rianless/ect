@@ -2069,14 +2069,13 @@ function wpPreloadLogos() {
 function wpSelectPreset(pi) {
   _wpState.bgType = 'gradient';
   _wpState.gradient = WP_PRESETS[pi].gradient;
-  // 선택 테두리 업데이트
   WP_PRESETS.forEach((_, i) => {
     const btn = document.getElementById('wp-preset-' + i);
     if (btn) btn.style.border = '2px solid ' + (i === pi ? '#E31837' : 'transparent');
   });
+  drawWallpaperCanvas();
 }
 
-// 크기·위치 라벨 텍스트만 업데이트 — render() 없이
 function wpUpdateLabels() {
   const scaleEl = document.getElementById('wp-label-scale');
   const offsetEl = document.getElementById('wp-label-offset');
@@ -2086,6 +2085,7 @@ function wpUpdateLabels() {
   if (offsetEl) offsetEl.textContent = '↕️ 달력 위치: ' + (_wpState.calOffsetY > 0 ? '+' : '') + _wpState.calOffsetY + '%';
   if (scaleSlider) scaleSlider.value = Math.round(_wpState.calScale * 100);
   if (offsetSlider) offsetSlider.value = _wpState.calOffsetY;
+  drawWallpaperCanvas();
 }
 
 function renderWallpaperSection(d) {
@@ -2146,14 +2146,15 @@ function closeWallpaperPanel() {
 function drawWallpaperCanvas() {
   const ws = _wpState;
   const canvas = document.getElementById('wallpaper-canvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  // S24+ 비율: 1080x2340 → 여기선 540x1170 (표시는 CSS로 축소)
+  // S24+ 비율: 1080x2340 → 540x1170
   const W = 540, H = 1170;
   canvas.width = W;
   canvas.height = H;
 
-  // ── 1. 배경 ──
+  // 배경
   if (ws.bgType === 'solid') {
     ctx.fillStyle = ws.bgColor;
     ctx.fillRect(0, 0, W, H);
@@ -2162,16 +2163,14 @@ function drawWallpaperCanvas() {
     ctx.fillRect(0, 0, W, H);
   }
 
-  // ── 2. 달력 직접 드로잉 ──
+  // 달력
   wpDrawCalendar(ctx, W, H, ws.calScale, ws.calOffsetY);
 
-  // 저장 버튼 활성화
-  try {
-    document.getElementById('wp-loading').style.display = 'none';
-    const btn = document.getElementById('wp-save-btn');
-    btn.disabled = false;
-    btn.style.opacity = '1';
-  } catch(e) {}
+  // 로딩 숨기기 + 저장 버튼 활성화
+  const loadingEl = document.getElementById('wp-loading');
+  if (loadingEl) loadingEl.style.display = 'none';
+  const btn = document.getElementById('wp-save-btn');
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
 }
 
 function wpParseGradient(ctx, str, W, H) {
