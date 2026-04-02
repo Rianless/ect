@@ -2032,9 +2032,25 @@ let _wpState = {
   bgType: 'gradient',
   bgColor: '#1a1a2e',
   gradient: 'linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
+  bgImage: null,   // 사용자 업로드 이미지 (Image 객체)
   calScale: 1.3,
   calOffsetY: 0,
 };
+
+function wpLoadBgImage(file) {
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    _wpState.bgType = 'image';
+    _wpState.bgImage = img;
+    // 업로드 버튼 텍스트 업데이트
+    const btn = document.getElementById('wp-photo-btn');
+    if (btn) btn.textContent = '🖼️ ' + file.name.slice(0,12) + (file.name.length>12?'…':'');
+    drawWallpaperCanvas();
+  };
+  img.src = url;
+}
 
 const WP_PRESETS = [
   {label:'🌙 딥 네이비', gradient:'linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)'},
@@ -2115,6 +2131,10 @@ async function openWallpaperMaker() {
     `<label style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap;flex-shrink:0">
       🎨 직접
       <input type="color" value="${_wpState.bgColor}" onchange="_wpState.bgType='solid';_wpState.bgColor=this.value;drawWallpaperCanvas()" style="width:22px;height:22px;border:none;background:none;cursor:pointer"/>
+    </label>
+    <label id="wp-photo-btn" style="padding:7px 12px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba(255,255,255,0.07)">
+      📷 내 사진
+      <input type="file" accept="image/*" onchange="wpLoadBgImage(this.files[0])" style="display:none"/>
     </label>`;
   }
 
@@ -2149,13 +2169,20 @@ function drawWallpaperCanvas() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  // S24+ 실제 해상도 1080x2340으로 직접 렌더
-  const W = 1080, H = 2340;
+  // S24+ 2x 고해상도 (2160x4680) — 저장 시 최고 화질
+  const W = 2160, H = 4680;
   canvas.width = W;
   canvas.height = H;
 
   // 배경
-  if (ws.bgType === 'solid') {
+  if (ws.bgType === 'image' && ws.bgImage) {
+    // cover 방식으로 이미지 꽉 채우기
+    const img = ws.bgImage;
+    const scale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  } else if (ws.bgType === 'solid') {
     ctx.fillStyle = ws.bgColor;
     ctx.fillRect(0, 0, W, H);
   } else {
@@ -2198,7 +2225,6 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   const _kn = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
   const today = _kn.getFullYear()+'-'+String(_kn.getMonth()+1).padStart(2,'0')+'-'+String(_kn.getDate()).padStart(2,'0');
 
-  // KIA 경기 맵
   const kmap = {};
   SCH.forEach(g => {
     if (g.away !== 'KIA' && g.home !== 'KIA') return;
@@ -2206,17 +2232,15 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
     if (gy === yr && gm === mo) kmap[gd] = g;
   });
 
-  // 달력 전체 영역 크기 (스케일 적용 전 기준)
   const calW = W * 0.94;
   const colW = calW / 7;
-  const rowH = 164;
+  const rowH = 328;
   const rows = Math.ceil((f + days) / 7);
-  const headerH = 104;  // 월 타이틀
-  const wdayH = 56;    // 요일 헤더
-  const legendH = 56;  // 하단 범례
-  const calTotalH = headerH + wdayH + rows * rowH + legendH + 16;
+  const headerH = 208;
+  const wdayH = 112;
+  const legendH = 112;
+  const calTotalH = headerH + wdayH + rows * rowH + legendH + 32;
 
-  // 스케일·오프셋 적용
   const drawW = calW * scale;
   const drawH = calTotalH * scale;
   const startX = (W - drawW) / 2;
@@ -2228,29 +2252,29 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   ctx.translate(startX, startY);
   ctx.scale(scale, scale);
 
-  // ── 월 타이틀 ──
-  ctx.font = `900 52px 'Noto Sans KR', sans-serif`;
+  // 월 타이틀
+  ctx.font = `900 104px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
-  ctx.fillText(`${yr}년 ${mo}월`, calW / 2, 36);
+  ctx.fillText(`${yr}년 ${mo}월`, calW / 2, 72);
 
-  // ── 구분선 ──
+  // 구분선
   ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, headerH);
   ctx.lineTo(calW, headerH);
   ctx.stroke();
 
-  // ── 요일 헤더 ──
+  // 요일 헤더
   WDAYS.forEach((w, i) => {
-    ctx.font = `700 22px 'Noto Sans KR', sans-serif`;
+    ctx.font = `700 44px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = i === 0 ? '#ff8a80' : i === 6 ? '#80d8ff' : 'rgba(255,255,255,0.5)';
     ctx.textAlign = 'center';
-    ctx.fillText(w, i * colW + colW / 2, headerH + wdayH - 12);
+    ctx.fillText(w, i * colW + colW / 2, headerH + wdayH - 24);
   });
 
-  // ── 날짜 셀 ──
+  // 날짜 셀
   for (let i = 1; i <= days; i++) {
     const ds = `${yr}-${pad(mo)}-${pad(i)}`;
     const kg = kmap[i];
@@ -2267,95 +2291,93 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
     const oppKey = isKiaHome ? kg.away : isKiaAway ? kg.home : null;
     const dow = col;
 
-    // 홈경기 배경 원
+    // 홈경기 원
     if (isKiaHome) {
       ctx.beginPath();
-      ctx.arc(cx, cy + 24, 28, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 48, 56, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(227,24,55,0.3)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(227,24,55,0.85)';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 6;
       ctx.stroke();
     }
-    // 오늘 배경
+    // 오늘 원
     if (isToday) {
       ctx.beginPath();
-      ctx.arc(cx, cy + 24, 28, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 48, 56, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 6;
       ctx.stroke();
     }
 
     // 날짜 숫자
     const dayColor = dow === 0 ? '#ff8a80' : dow === 6 ? '#80d8ff' : 'rgba(255,255,255,0.9)';
-    ctx.font = `${isToday ? 800 : 500} 26px 'Noto Sans KR', sans-serif`;
+    ctx.font = `${isToday ? 800 : 500} 52px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = dayColor;
     ctx.textAlign = 'center';
-    ctx.fillText(String(i), cx, cy + 34);
+    ctx.fillText(String(i), cx, cy + 68);
 
     // 상대팀 로고
     if (isKiaGame && oppKey) {
       const logoImg = _wpLogoCache[oppKey];
-      const logoSize = 44;
+      const logoSize = 88;
       const logoX = cx - logoSize / 2;
-      const logoY = cy + 48;
+      const logoY = cy + 96;
       if (logoImg) {
         ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
       } else {
-        // 로고 없으면 팀명 약칭 폴백
-        ctx.font = `700 18px 'Noto Sans KR', sans-serif`;
+        ctx.font = `700 36px 'Noto Sans KR', sans-serif`;
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.textAlign = 'center';
-        ctx.fillText(oppKey, cx, cy + 70);
+        ctx.fillText(oppKey, cx, cy + 140);
       }
-
     }
   }
 
-  // ── 구분선 (달력 아래) ──
-  const legendY = headerH + wdayH + rows * rowH + 16;
+  // 구분선 (달력 아래)
+  const legendY = headerH + wdayH + rows * rowH + 32;
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, legendY);
   ctx.lineTo(calW, legendY);
   ctx.stroke();
 
-  // ── 범례 ──
-  const ly = legendY + 36;
-  // 홈경기
+  // 범례
+  const ly = legendY + 72;
   ctx.beginPath();
-  ctx.arc(32, ly - 8, 12, 0, Math.PI * 2);
+  ctx.arc(64, ly - 16, 24, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(227,24,55,0.3)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(227,24,55,0.85)';
-  ctx.lineWidth = 2.4;
+  ctx.lineWidth = 4.8;
   ctx.stroke();
-  ctx.font = `500 20px 'Noto Sans KR', sans-serif`;
+  ctx.font = `500 40px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'left';
-  ctx.fillText('홈경기', 52, ly);
-  // 오늘
+  ctx.fillText('홈경기', 104, ly);
+
   ctx.beginPath();
-  ctx.arc(180, ly - 8, 12, 0, Math.PI * 2);
+  ctx.arc(360, ly - 16, 24, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = 2.4;
+  ctx.lineWidth = 4.8;
   ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'left';
-  ctx.fillText('오늘', 200, ly);
-  // 워터마크
-  ctx.font = `700 20px 'Noto Sans KR', sans-serif`;
+  ctx.fillText('오늘', 400, ly);
+
+  ctx.font = `700 40px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.textAlign = 'right';
   ctx.fillText('horang2', calW, ly);
 
   ctx.restore();
 }
+
 
 function saveWallpaper() {
   const canvas = document.getElementById('wallpaper-canvas');
