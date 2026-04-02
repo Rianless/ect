@@ -2064,23 +2064,26 @@ const WP_PRESETS = [
 ];
 
 // 팀 약칭 (캔버스에 텍스트로 표시)
-// 팀 로고 캐시 — fetch → blob URL → Image (CORS taint 완전 우회)
+// 팀 로고 캐시 — crossOrigin 없이 로드, 로드 완료 시 캔버스 재드로우
 const _wpLogoCache = {};
 function wpPreloadLogos() {
-  return Promise.all(Object.keys(T).map(key => new Promise(resolve => {
-    if (_wpLogoCache[key] !== undefined) { resolve(); return; }
-    _wpLogoCache[key] = null; // 로드 중 표시
-    fetch(T[key].img)
-      .then(r => r.blob())
-      .then(blob => {
-        const blobUrl = URL.createObjectURL(blob);
-        const img = new Image();
-        img.onload = () => { _wpLogoCache[key] = img; resolve(); };
-        img.onerror = () => resolve();
-        img.src = blobUrl;
-      })
-      .catch(() => resolve());
-  })));
+  // 1) 즉시 resolve — 캔버스 먼저 그림
+  // 2) 각 로고는 백그라운드 로드 후 완료되면 재드로우
+  Object.keys(T).forEach(key => {
+    if (_wpLogoCache[key]) return;
+    const img = new Image();
+    // crossOrigin 없이 로드 (캔버스 taint는 toDataURL 시 처리)
+    img.onload = () => {
+      _wpLogoCache[key] = img;
+      // 패널이 열려있으면 재드로우
+      if (document.getElementById('wallpaper-panel').classList.contains('open')) {
+        drawWallpaperCanvas();
+      }
+    };
+    img.onerror = () => { _wpLogoCache[key] = null; };
+    img.src = T[key].img;
+  });
+  return Promise.resolve(); // 즉시 반환
 }
 
 // 프리셋 선택 — render() 없이 DOM만 업데이트
@@ -2185,12 +2188,8 @@ async function openWallpaperMaker() {
   loadingEl.textContent = '로고 불러오는 중…';
   document.getElementById('wp-save-btn').disabled = true;
   document.getElementById('wp-save-btn').style.opacity = '0.5';
-  try {
-    await wpPreloadLogos();
-    drawWallpaperCanvas();
-  } catch(e) {
-    loadingEl.textContent = '오류 발생. 다시 시도해주세요.';
-  }
+  await wpPreloadLogos().catch(() => {});
+  drawWallpaperCanvas();
 }
 
 function closeWallpaperPanel() {
@@ -2300,21 +2299,22 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   const legendH = 112;
   const calTotalH = headerH + wdayH + rows * rowH + legendH + 32;
 
-  const drawW = calW * scale;
-  const drawH = calTotalH * scale;
+  const pad = _wpState.calBg ? 60 : 0;
+  const drawW = (calW + pad * 2) * scale;
+  const drawH = (calTotalH + pad * 2) * scale;
   const startX = (W - drawW) / 2;
   const baseY = (H - drawH) / 2;
   const offsetPx = (offsetYPct / 100) * H;
   const startY = baseY + offsetPx;
 
   ctx.save();
-  ctx.translate(startX, startY);
+  ctx.translate(startX + pad * scale, startY + pad * scale);
   ctx.scale(scale, scale);
 
-  // 달력 배경 패널
+  // 달력 배경 패널 (scale 좌표계 안에서 그림)
   if (_wpState.calBg) {
-    const pad = 48;
-    const r = 60; // 모서리 반지름
+    const pad = 60;
+    const r = 80;
     const bx = -pad, by = -pad;
     const bw = calW + pad * 2, bh = calTotalH + pad * 2;
     ctx.beginPath();
@@ -2365,10 +2365,10 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
     const oppKey = isKiaHome ? kg.away : isKiaAway ? kg.home : null;
     const dow = col;
 
-    // 홈경기 원
+    // 홈경기 원 (날짜 숫자 뒤에 위치)
     if (isKiaHome) {
       ctx.beginPath();
-      ctx.arc(cx, cy + 48, 56, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 30, 44, 0, Math.PI * 2);
       ctx.fillStyle = C.homeCircleFill;
       ctx.fill();
       ctx.strokeStyle = C.homeCircleStroke;
@@ -2376,20 +2376,19 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
       ctx.stroke();
     }
 
-
     // 날짜 숫자
     const dayColor = dow === 0 ? C.daySun : dow === 6 ? C.daySat : C.day;
     ctx.font = `500 52px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = dayColor;
     ctx.textAlign = 'center';
-    ctx.fillText(String(i), cx, cy + 68);
+    ctx.fillText(String(i), cx, cy + 48);
 
-    // 상대팀 로고
+    // 상대팀 로고 (날짜 아래 독립 영역)
     if (isKiaGame && oppKey) {
       const logoImg = _wpLogoCache[oppKey];
       const logoSize = 140;
       const logoX = cx - logoSize / 2;
-      const logoY = cy + 72;
+      const logoY = cy + 100;
       if (logoImg) {
         ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
       } else {
@@ -2437,10 +2436,22 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
 
 function saveWallpaper() {
   const canvas = document.getElementById('wallpaper-canvas');
-  const a = document.createElement('a');
-  a.download = `KIA_${state.yr}년${state.mo}월_배경화면.png`;
-  a.href = canvas.toDataURL('image/png');
-  a.click();
+  try {
+    const a = document.createElement('a');
+    a.download = `KIA_${state.yr}년${state.mo}월_배경화면.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  } catch(e) {
+    // taint 오류 시 로고 없이 재렌더 후 저장
+    Object.keys(_wpLogoCache).forEach(k => { _wpLogoCache[k] = null; });
+    drawWallpaperCanvas();
+    setTimeout(() => {
+      const a = document.createElement('a');
+      a.download = `KIA_${state.yr}년${state.mo}월_배경화면.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    }, 100);
+  }
 }
 
 
