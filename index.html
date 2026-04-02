@@ -2032,7 +2032,7 @@ let _wpState = {
   bgType: 'gradient',
   bgColor: '#1a1a2e',
   gradient: 'linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
-  calScale: 1.0,
+  calScale: 1.3,
   calOffsetY: 0,
 };
 
@@ -2207,9 +2207,9 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   });
 
   // 달력 전체 영역 크기 (스케일 적용 전 기준)
-  const calW = W * 0.88;
+  const calW = W * 0.94;
   const colW = calW / 7;
-  const rowH = 76;
+  const rowH = 68;
   const rows = Math.ceil((f + days) / 7);
   const headerH = 52;  // 월 타이틀
   const wdayH = 28;    // 요일 헤더
@@ -2310,11 +2310,7 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
         ctx.textAlign = 'center';
         ctx.fillText(oppKey, cx, cy + 35);
       }
-      // 홈/원정 텍스트
-      ctx.font = `500 8px 'Noto Sans KR', sans-serif`;
-      ctx.fillStyle = isKiaHome ? 'rgba(255,180,180,0.75)' : 'rgba(180,210,255,0.65)';
-      ctx.textAlign = 'center';
-      ctx.fillText(isKiaHome ? '홈' : '원정', cx, cy + 50);
+
     }
   }
 
@@ -4815,7 +4811,7 @@ _initFetch.then(() => render()).catch(() => {});
     <div id="wp-label-scale" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px">📐 달력 크기: 100%</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <button onclick="_wpState.calScale=Math.max(0.4,parseFloat((_wpState.calScale-0.05).toFixed(2)));wpUpdateLabels()" style="width:36px;height:36px;background:rgba(255,255,255,0.1);border:none;border-radius:8px;font-size:20px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">−</button>
-      <input id="wp-slider-scale" type="range" min="40" max="140" value="100" oninput="_wpState.calScale=this.value/100;wpUpdateLabels()" style="flex:1;accent-color:#E31837"/>
+      <input id="wp-slider-scale" type="range" min="40" max="140" value="130" oninput="_wpState.calScale=this.value/100;wpUpdateLabels()" style="flex:1;accent-color:#E31837"/>
       <button onclick="_wpState.calScale=Math.min(1.4,parseFloat((_wpState.calScale+0.05).toFixed(2)));wpUpdateLabels()" style="width:36px;height:36px;background:rgba(255,255,255,0.1);border:none;border-radius:8px;font-size:20px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">+</button>
     </div>
 
