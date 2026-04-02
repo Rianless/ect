@@ -2149,8 +2149,8 @@ function drawWallpaperCanvas() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  // S24+ 비율: 1080x2340 → 540x1170
-  const W = 540, H = 1170;
+  // S24+ 실제 해상도 1080x2340으로 직접 렌더
+  const W = 1080, H = 2340;
   canvas.width = W;
   canvas.height = H;
 
@@ -2209,11 +2209,11 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   // 달력 전체 영역 크기 (스케일 적용 전 기준)
   const calW = W * 0.94;
   const colW = calW / 7;
-  const rowH = 82;
+  const rowH = 164;
   const rows = Math.ceil((f + days) / 7);
-  const headerH = 52;  // 월 타이틀
-  const wdayH = 28;    // 요일 헤더
-  const legendH = 28;  // 하단 범례
+  const headerH = 104;  // 월 타이틀
+  const wdayH = 56;    // 요일 헤더
+  const legendH = 56;  // 하단 범례
   const calTotalH = headerH + wdayH + rows * rowH + legendH + 16;
 
   // 스케일·오프셋 적용
@@ -2229,14 +2229,14 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   ctx.scale(scale, scale);
 
   // ── 월 타이틀 ──
-  ctx.font = `900 26px 'Noto Sans KR', sans-serif`;
+  ctx.font = `900 52px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.fillText(`${yr}년 ${mo}월`, calW / 2, 36);
 
   // ── 구분선 ──
   ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(0, headerH);
   ctx.lineTo(calW, headerH);
@@ -2244,10 +2244,10 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
 
   // ── 요일 헤더 ──
   WDAYS.forEach((w, i) => {
-    ctx.font = `700 11px 'Noto Sans KR', sans-serif`;
+    ctx.font = `700 22px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = i === 0 ? '#ff8a80' : i === 6 ? '#80d8ff' : 'rgba(255,255,255,0.5)';
     ctx.textAlign = 'center';
-    ctx.fillText(w, i * colW + colW / 2, headerH + wdayH - 6);
+    ctx.fillText(w, i * colW + colW / 2, headerH + wdayH - 12);
   });
 
   // ── 날짜 셀 ──
@@ -2270,86 +2270,86 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
     // 홈경기 배경 원
     if (isKiaHome) {
       ctx.beginPath();
-      ctx.arc(cx, cy + 12, 14, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 24, 28, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(227,24,55,0.3)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(227,24,55,0.85)';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 3;
       ctx.stroke();
     }
     // 오늘 배경
     if (isToday) {
       ctx.beginPath();
-      ctx.arc(cx, cy + 12, 14, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 24, 28, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 3;
       ctx.stroke();
     }
 
     // 날짜 숫자
     const dayColor = dow === 0 ? '#ff8a80' : dow === 6 ? '#80d8ff' : 'rgba(255,255,255,0.9)';
-    ctx.font = `${isToday ? 800 : 500} 13px 'Noto Sans KR', sans-serif`;
+    ctx.font = `${isToday ? 800 : 500} 26px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = dayColor;
     ctx.textAlign = 'center';
-    ctx.fillText(String(i), cx, cy + 17);
+    ctx.fillText(String(i), cx, cy + 34);
 
     // 상대팀 로고
     if (isKiaGame && oppKey) {
       const logoImg = _wpLogoCache[oppKey];
-      const logoSize = 22;
+      const logoSize = 44;
       const logoX = cx - logoSize / 2;
-      const logoY = cy + 22;
+      const logoY = cy + 48;
       if (logoImg) {
         ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
       } else {
         // 로고 없으면 팀명 약칭 폴백
-        ctx.font = `700 9px 'Noto Sans KR', sans-serif`;
+        ctx.font = `700 18px 'Noto Sans KR', sans-serif`;
         ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.textAlign = 'center';
-        ctx.fillText(oppKey, cx, cy + 35);
+        ctx.fillText(oppKey, cx, cy + 70);
       }
 
     }
   }
 
   // ── 구분선 (달력 아래) ──
-  const legendY = headerH + wdayH + rows * rowH + 8;
+  const legendY = headerH + wdayH + rows * rowH + 16;
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(0, legendY);
   ctx.lineTo(calW, legendY);
   ctx.stroke();
 
   // ── 범례 ──
-  const ly = legendY + 18;
+  const ly = legendY + 36;
   // 홈경기
   ctx.beginPath();
-  ctx.arc(16, ly - 4, 6, 0, Math.PI * 2);
+  ctx.arc(32, ly - 8, 12, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(227,24,55,0.3)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(227,24,55,0.85)';
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 2.4;
   ctx.stroke();
-  ctx.font = `500 10px 'Noto Sans KR', sans-serif`;
+  ctx.font = `500 20px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'left';
-  ctx.fillText('홈경기', 26, ly);
+  ctx.fillText('홈경기', 52, ly);
   // 오늘
   ctx.beginPath();
-  ctx.arc(90, ly - 4, 6, 0, Math.PI * 2);
+  ctx.arc(180, ly - 8, 12, 0, Math.PI * 2);
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 2.4;
   ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'left';
-  ctx.fillText('오늘', 100, ly);
+  ctx.fillText('오늘', 200, ly);
   // 워터마크
-  ctx.font = `700 10px 'Noto Sans KR', sans-serif`;
+  ctx.font = `700 20px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.textAlign = 'right';
   ctx.fillText('horang2', calW, ly);
@@ -2358,17 +2358,10 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
 }
 
 function saveWallpaper() {
-  const src = document.getElementById('wallpaper-canvas');
-  // 2배 업스케일 → 실제 S24+ 해상도 (1080x2340)
-  const out = document.createElement('canvas');
-  out.width = src.width * 2;
-  out.height = src.height * 2;
-  const octx = out.getContext('2d');
-  octx.imageSmoothingEnabled = false;
-  octx.drawImage(src, 0, 0, out.width, out.height);
+  const canvas = document.getElementById('wallpaper-canvas');
   const a = document.createElement('a');
   a.download = `KIA_${state.yr}년${state.mo}월_배경화면.png`;
-  a.href = out.toDataURL('image/png');
+  a.href = canvas.toDataURL('image/png');
   a.click();
 }
 
