@@ -2271,7 +2271,7 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
 
   const calW = W * 0.94;
   const colW = calW / 7;
-  const rowH = 328;
+  const rowH = 370;
   const rows = Math.ceil((f + days) / 7);
   const headerH = 208;
   const wdayH = 112;
@@ -2359,9 +2359,9 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
     // 상대팀 로고
     if (isKiaGame && oppKey) {
       const logoImg = _wpLogoCache[oppKey];
-      const logoSize = 88;
+      const logoSize = 140;
       const logoX = cx - logoSize / 2;
-      const logoY = cy + 96;
+      const logoY = cy + 72;
       if (logoImg) {
         ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
       } else {
