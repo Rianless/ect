@@ -2114,7 +2114,7 @@ async function openWallpaperMaker() {
     ).join('') +
     `<label style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap;flex-shrink:0">
       🎨 직접
-      <input type="color" value="${_wpState.bgColor}" onchange="_wpState.bgType='solid';_wpState.bgColor=this.value" style="width:22px;height:22px;border:none;background:none;cursor:pointer"/>
+      <input type="color" value="${_wpState.bgColor}" onchange="_wpState.bgType='solid';_wpState.bgColor=this.value;drawWallpaperCanvas()" style="width:22px;height:22px;border:none;background:none;cursor:pointer"/>
     </label>`;
   }
 
@@ -2209,7 +2209,7 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   // 달력 전체 영역 크기 (스케일 적용 전 기준)
   const calW = W * 0.94;
   const colW = calW / 7;
-  const rowH = 68;
+  const rowH = 82;
   const rows = Math.ceil((f + days) / 7);
   const headerH = 52;  // 월 타이틀
   const wdayH = 28;    // 요일 헤더
