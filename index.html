@@ -67,6 +67,7 @@
     /* 사진 전체화면 뷰어 */
     #photo-viewer{position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.95);display:none;align-items:center;justify-content:center;flex-direction:column;animation:fadeIn 0.2s}
     #photo-viewer.open{display:flex}
+    #wallpaper-panel{display:none}
     #wallpaper-panel.open{display:flex}
     #photo-viewer img{max-width:100%;max-height:85vh;object-fit:contain;border-radius:8px;touch-action:pinch-zoom}
     #photo-viewer-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
@@ -2045,53 +2046,54 @@ const WP_PRESETS = [
 ];
 
 // 팀 약칭 (캔버스에 텍스트로 표시)
-// 팀 로고 캔버스 캐시 (crossOrigin 프리로드)
+// 팀 로고 캐시 — fetch → blob URL → Image (CORS taint 완전 우회)
 const _wpLogoCache = {};
 function wpPreloadLogos() {
   return Promise.all(Object.keys(T).map(key => new Promise(resolve => {
-    if (_wpLogoCache[key]) { resolve(); return; }
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => { _wpLogoCache[key] = img; resolve(); };
-    img.onerror = () => resolve();
-    img.src = T[key].img;
+    if (_wpLogoCache[key] !== undefined) { resolve(); return; }
+    _wpLogoCache[key] = null; // 로드 중 표시
+    fetch(T[key].img)
+      .then(r => r.blob())
+      .then(blob => {
+        const blobUrl = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => { _wpLogoCache[key] = img; resolve(); };
+        img.onerror = () => resolve();
+        img.src = blobUrl;
+      })
+      .catch(() => resolve());
   })));
 }
 
+// 프리셋 선택 — render() 없이 DOM만 업데이트
+function wpSelectPreset(pi) {
+  _wpState.bgType = 'gradient';
+  _wpState.gradient = WP_PRESETS[pi].gradient;
+  // 선택 테두리 업데이트
+  WP_PRESETS.forEach((_, i) => {
+    const btn = document.getElementById('wp-preset-' + i);
+    if (btn) btn.style.border = '2px solid ' + (i === pi ? '#E31837' : 'transparent');
+  });
+}
+
+// 크기·위치 라벨 텍스트만 업데이트 — render() 없이
+function wpUpdateLabels() {
+  const scaleEl = document.getElementById('wp-label-scale');
+  const offsetEl = document.getElementById('wp-label-offset');
+  const scaleSlider = document.getElementById('wp-slider-scale');
+  const offsetSlider = document.getElementById('wp-slider-offset');
+  if (scaleEl) scaleEl.textContent = '📐 달력 크기: ' + Math.round(_wpState.calScale * 100) + '%';
+  if (offsetEl) offsetEl.textContent = '↕️ 달력 위치: ' + (_wpState.calOffsetY > 0 ? '+' : '') + _wpState.calOffsetY + '%';
+  if (scaleSlider) scaleSlider.value = Math.round(_wpState.calScale * 100);
+  if (offsetSlider) offsetSlider.value = _wpState.calOffsetY;
+}
+
 function renderWallpaperSection(d) {
-  const ws = _wpState;
-  const presetBtns = WP_PRESETS.map(p => `
-    <button onclick="_wpState.bgType='gradient';_wpState.gradient='${p.gradient}';render()"
-      style="padding:7px 12px;background:${p.gradient};border:2px solid ${ws.gradient===p.gradient?'#E31837':'transparent'};color:#fff;border-radius:10px;font-size:11px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0">
-      ${p.label}
-    </button>`).join('');
   return `
     <div style="padding-top:4px">
-      <div style="font-size:12px;font-weight:700;color:${d.sub};margin-bottom:10px">갤럭시 S24+ 배경화면 비율 (9:19.5)</div>
-
-      <div style="font-size:11px;font-weight:700;color:${d.sub};margin-bottom:6px">🎨 배경 색상</div>
-      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">
-        ${presetBtns}
-        <label style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:2px solid ${d.cardB};border-radius:10px;font-size:11px;font-weight:700;color:${d.text};cursor:pointer;white-space:nowrap;flex-shrink:0">
-          🎨 직접입력
-          <input type="color" value="${ws.bgColor}" onchange="_wpState.bgType='solid';_wpState.bgColor=this.value;render()" style="width:24px;height:24px;border:none;background:none;cursor:pointer"/>
-        </label>
+      <div style="font-size:12px;color:${d.sub};margin-bottom:14px;line-height:1.6">
+        달력 배경화면을 만들어보세요.<br/>아래 버튼에서 색상·크기·위치를 조절할 수 있어요.
       </div>
-
-      <div style="font-size:11px;font-weight:700;color:${d.sub};margin-bottom:6px">📐 달력 크기: ${Math.round(ws.calScale*100)}%</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <button onclick="_wpState.calScale=Math.max(0.4,parseFloat((_wpState.calScale-0.05).toFixed(2)));render()" style="width:32px;height:32px;background:${d.bg};border:1.5px solid ${d.cardB};border-radius:8px;font-size:18px;color:${d.text};display:flex;align-items:center;justify-content:center;cursor:pointer">−</button>
-        <input type="range" min="40" max="140" value="${Math.round(ws.calScale*100)}" oninput="_wpState.calScale=this.value/100;render()" style="flex:1;accent-color:#E31837"/>
-        <button onclick="_wpState.calScale=Math.min(1.4,parseFloat((_wpState.calScale+0.05).toFixed(2)));render()" style="width:32px;height:32px;background:${d.bg};border:1.5px solid ${d.cardB};border-radius:8px;font-size:18px;color:${d.text};display:flex;align-items:center;justify-content:center;cursor:pointer">+</button>
-      </div>
-
-      <div style="font-size:11px;font-weight:700;color:${d.sub};margin-bottom:6px">↕️ 달력 위치: ${ws.calOffsetY > 0 ? '+' : ''}${ws.calOffsetY}%</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <button onclick="_wpState.calOffsetY=Math.max(-40,_wpState.calOffsetY-5);render()" style="width:32px;height:32px;background:${d.bg};border:1.5px solid ${d.cardB};border-radius:8px;font-size:16px;color:${d.text};display:flex;align-items:center;justify-content:center;cursor:pointer">↑</button>
-        <input type="range" min="-40" max="40" value="${ws.calOffsetY}" oninput="_wpState.calOffsetY=parseInt(this.value);render()" style="flex:1;accent-color:#E31837"/>
-        <button onclick="_wpState.calOffsetY=Math.min(40,_wpState.calOffsetY+5);render()" style="width:32px;height:32px;background:${d.bg};border:1.5px solid ${d.cardB};border-radius:8px;font-size:16px;color:${d.text};display:flex;align-items:center;justify-content:center;cursor:pointer">↓</button>
-      </div>
-
       <button onclick="openWallpaperMaker()" style="width:100%;padding:14px;background:linear-gradient(135deg,#E31837,#c0102a);color:#fff;border-radius:12px;font-size:15px;font-weight:900;font-family:'Noto Sans KR',sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(227,24,55,0.35)">
         🖼️ 미리보기 &amp; 저장
       </button>
@@ -2099,12 +2101,37 @@ function renderWallpaperSection(d) {
 }
 
 async function openWallpaperMaker() {
+  document.getElementById('wallpaper-panel').classList.add('open');
+
+  // 프리셋 버튼 채우기
+  const row = document.getElementById('wp-preset-row');
+  if (row) {
+    row.innerHTML = WP_PRESETS.map((p, i) =>
+      `<button id="wp-preset-${i}" onclick="wpSelectPreset(${i})"
+        style="padding:7px 12px;background:${p.gradient};border:2px solid ${_wpState.gradient===p.gradient?'#E31837':'transparent'};color:#fff;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;cursor:pointer;font-family:'Noto Sans KR',sans-serif">
+        ${p.label}
+      </button>`
+    ).join('') +
+    `<label style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap;flex-shrink:0">
+      🎨 직접
+      <input type="color" value="${_wpState.bgColor}" onchange="_wpState.bgType='solid';_wpState.bgColor=this.value" style="width:22px;height:22px;border:none;background:none;cursor:pointer"/>
+    </label>`;
+  }
+
+  // 슬라이더 초기값 동기화
+  wpUpdateLabels();
+
   const loadingEl = document.getElementById('wp-loading');
   loadingEl.style.display = 'flex';
   loadingEl.textContent = '로고 불러오는 중…';
-  document.getElementById('wallpaper-panel').classList.add('open');
-  await wpPreloadLogos();
-  drawWallpaperCanvas();
+  document.getElementById('wp-save-btn').disabled = true;
+  document.getElementById('wp-save-btn').style.opacity = '0.5';
+  try {
+    await wpPreloadLogos();
+    drawWallpaperCanvas();
+  } catch(e) {
+    loadingEl.textContent = '오류 발생. 다시 시도해주세요.';
+  }
 }
 
 function closeWallpaperPanel() {
@@ -2139,10 +2166,12 @@ function drawWallpaperCanvas() {
   wpDrawCalendar(ctx, W, H, ws.calScale, ws.calOffsetY);
 
   // 저장 버튼 활성화
-  document.getElementById('wp-loading').style.display = 'none';
-  const btn = document.getElementById('wp-save-btn');
-  btn.disabled = false;
-  btn.style.opacity = '1';
+  try {
+    document.getElementById('wp-loading').style.display = 'none';
+    const btn = document.getElementById('wp-save-btn');
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  } catch(e) {}
 }
 
 function wpParseGradient(ctx, str, W, H) {
@@ -4763,7 +4792,7 @@ _initFetch.then(() => render()).catch(() => {});
 </script>
 
 <!-- 배경화면 메이커 패널 -->
-<div id="wallpaper-panel" style="position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);display:none;align-items:flex-end;justify-content:center;animation:fadeIn 0.2s">
+<div id="wallpaper-panel" style="position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.2s">
 <div id="wallpaper-box" style="width:100%;max-width:520px;height:96vh;background:#0a0a16;border-radius:22px 22px 0 0;display:flex;flex-direction:column;animation:slideUp 0.3s ease;overflow:hidden">
   <!-- 헤더 -->
   <div style="padding:16px 18px 12px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
@@ -4774,33 +4803,50 @@ _initFetch.then(() => render()).catch(() => {});
     <button onclick="closeWallpaperPanel()" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.1);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer">×</button>
   </div>
 
-  <!-- 미리보기 영역 -->
-  <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px">
+  <!-- 스크롤 영역 -->
+  <div style="flex:1;overflow-y:auto;padding:16px 16px 32px;-webkit-overflow-scrolling:touch">
+
+    <!-- 배경 색상 프리셋 -->
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px">🎨 배경 색상</div>
+    <div id="wp-preset-row" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:16px;-webkit-overflow-scrolling:touch">
+      <!-- JS로 채워짐 -->
+    </div>
+
+    <!-- 달력 크기 -->
+    <div id="wp-label-scale" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px">📐 달력 크기: 100%</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button onclick="_wpState.calScale=Math.max(0.4,parseFloat((_wpState.calScale-0.05).toFixed(2)));wpUpdateLabels()" style="width:36px;height:36px;background:rgba(255,255,255,0.1);border:none;border-radius:8px;font-size:20px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">−</button>
+      <input id="wp-slider-scale" type="range" min="40" max="140" value="100" oninput="_wpState.calScale=this.value/100;wpUpdateLabels()" style="flex:1;accent-color:#E31837"/>
+      <button onclick="_wpState.calScale=Math.min(1.4,parseFloat((_wpState.calScale+0.05).toFixed(2)));wpUpdateLabels()" style="width:36px;height:36px;background:rgba(255,255,255,0.1);border:none;border-radius:8px;font-size:20px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">+</button>
+    </div>
+
+    <!-- 달력 위치 -->
+    <div id="wp-label-offset" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px">↕️ 달력 위치: 0%</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <button onclick="_wpState.calOffsetY=Math.max(-40,_wpState.calOffsetY-5);wpUpdateLabels()" style="width:36px;height:36px;background:rgba(255,255,255,0.1);border:none;border-radius:8px;font-size:18px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">↑</button>
+      <input id="wp-slider-offset" type="range" min="-40" max="40" value="0" oninput="_wpState.calOffsetY=parseInt(this.value);wpUpdateLabels()" style="flex:1;accent-color:#E31837"/>
+      <button onclick="_wpState.calOffsetY=Math.min(40,_wpState.calOffsetY+5);wpUpdateLabels()" style="width:36px;height:36px;background:rgba(255,255,255,0.1);border:none;border-radius:8px;font-size:18px;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">↓</button>
+    </div>
+
     <!-- 폰 프레임 + 캔버스 -->
-    <div style="position:relative;width:180px;flex-shrink:0">
-      <!-- 폰 프레임 -->
-      <div style="border:3px solid rgba(255,255,255,0.25);border-radius:28px;overflow:hidden;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
-        <!-- 상단 노치 -->
-        <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:50px;height:6px;background:rgba(0,0,0,0.8);border-radius:3px;z-index:10"></div>
-        <canvas id="wallpaper-canvas" style="display:block;width:180px;height:390px;image-rendering:crisp-edges"></canvas>
-      </div>
-      <!-- 로딩 오버레이 -->
-      <div id="wp-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);border-radius:28px;color:#fff;font-size:12px;font-weight:700">
-        달력 렌더링 중…
+    <div style="display:flex;justify-content:center;margin-bottom:14px">
+      <div style="position:relative;width:180px">
+        <div style="border:3px solid rgba(255,255,255,0.25);border-radius:28px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
+          <div style="position:absolute;top:6px;left:50%;transform:translateX(-50%);width:50px;height:6px;background:rgba(0,0,0,0.8);border-radius:3px;z-index:10"></div>
+          <canvas id="wallpaper-canvas" style="display:block;width:180px;height:390px;image-rendering:crisp-edges"></canvas>
+        </div>
+        <div id="wp-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border-radius:28px;color:#fff;font-size:12px;font-weight:700">
+          로고 불러오는 중…
+        </div>
       </div>
     </div>
 
-    <!-- 안내 -->
-    <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;line-height:1.6">
-      PNG로 저장 후 갤러리 앱에서<br/>배경화면으로 설정하세요
-    </div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);text-align:center;margin-bottom:16px;line-height:1.6">PNG로 저장 후 갤러리 앱에서 배경 설정</div>
 
     <!-- 저장 버튼 -->
     <button id="wp-save-btn" onclick="saveWallpaper()" disabled style="width:100%;padding:15px;background:linear-gradient(135deg,#E31837,#c0102a);color:#fff;border-radius:14px;font-size:16px;font-weight:900;font-family:'Noto Sans KR',sans-serif;cursor:pointer;box-shadow:0 4px 18px rgba(227,24,55,0.4);opacity:0.5;transition:opacity 0.3s">
       📥 배경화면 저장
     </button>
-
-    <div style="height:20px"></div>
   </div>
 </div>
 </div>
