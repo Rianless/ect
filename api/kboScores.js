@@ -275,17 +275,26 @@ export default async function handler(req, res) {
       // game-polling으로 textRelayData 포함 전체 응답 가져오기
       const inn = inning || 1;
       const detail = await fetchGameDetail(gameId, inn);
-      if (!detail) {
-        // fallback: lineup 전용 API
+      let td = detail ? (detail.textRelayData || detail) : null;
+      let homeLineup = td?.homeLineup || detail?.homeLineup || null;
+      let awayLineup = td?.awayLineup || detail?.awayLineup || null;
+
+      // ★ game-polling에서 라인업 없으면 (BEFORE 경기 포함) lineup 전용 API로 재시도
+      if (!homeLineup && !awayLineup) {
         const lineupRaw = await fetchLineup(gameId, inn);
-        if (!lineupRaw) return res.status(404).json({ error: 'Lineup not found' });
-        return res.status(200).json(lineupRaw);
+        if (lineupRaw) {
+          const lt = lineupRaw.textRelayData || lineupRaw;
+          homeLineup = lt.homeLineup || lineupRaw.homeLineup || null;
+          awayLineup = lt.awayLineup || lineupRaw.awayLineup || null;
+          if (!td) td = lineupRaw;
+        }
       }
-      // textRelayData 안의 homeLineup/awayLineup 추출
-      const td = detail.textRelayData || detail;
-      const homeLineup = td.homeLineup || detail.homeLineup || null;
-      const awayLineup = td.awayLineup || detail.awayLineup || null;
-      let gs = td.currentGameState || detail.currentGameState || null;
+
+      if (!homeLineup && !awayLineup && !detail) {
+        return res.status(404).json({ error: 'Lineup not found' });
+      }
+
+      let gs = td?.currentGameState || detail?.currentGameState || null;
 
       // pcode → 이름 맵 구성 (lineup 배열에서 pcode 추출)
       const pcodeMap = {};
@@ -357,4 +366,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message });
   }
 }
-
