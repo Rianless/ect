@@ -2036,6 +2036,7 @@ let _wpState = {
   calScale: 1.3,
   calOffsetY: 0,
   textMode: 'dark',  // 'dark'=흰글자, 'light'=검은글자
+  calBg: null,       // 달력 배경색 (null=없음)
 };
 
 function wpLoadBgImage(file) {
@@ -2083,6 +2084,25 @@ function wpPreloadLogos() {
 }
 
 // 프리셋 선택 — render() 없이 DOM만 업데이트
+function wpSetCalBg(color) {
+  _wpState.calBg = color;
+  ['none','white','black'].forEach(id => {
+    const btn = document.getElementById('wp-calbg-' + id);
+    if (btn) btn.style.border = '2px solid transparent';
+  });
+  if (color === null) {
+    const btn = document.getElementById('wp-calbg-none');
+    if (btn) btn.style.border = '2px solid #E31837';
+  } else if (color === 'rgba(255,255,255,0.88)') {
+    const btn = document.getElementById('wp-calbg-white');
+    if (btn) btn.style.border = '2px solid #E31837';
+  } else if (color === 'rgba(0,0,0,0.55)') {
+    const btn = document.getElementById('wp-calbg-black');
+    if (btn) btn.style.border = '2px solid #E31837';
+  }
+  drawWallpaperCanvas();
+}
+
 function wpSetTextMode(mode) {
   _wpState.textMode = mode;
   const darkBtn = document.getElementById('wp-text-dark');
@@ -2157,6 +2177,7 @@ async function openWallpaperMaker() {
   // 슬라이더 + 토글 초기값 동기화
   wpUpdateLabels();
   wpSetTextMode(_wpState.textMode);
+  wpSetCalBg(_wpState.calBg);
 
   const loadingEl = document.getElementById('wp-loading');
   loadingEl.style.display = 'flex';
@@ -2289,19 +2310,34 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   ctx.translate(startX, startY);
   ctx.scale(scale, scale);
 
+  // 달력 배경 패널
+  if (_wpState.calBg) {
+    const pad = 48;
+    const r = 60; // 모서리 반지름
+    const bx = -pad, by = -pad;
+    const bw = calW + pad * 2, bh = calTotalH + pad * 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + r, by);
+    ctx.lineTo(bx + bw - r, by);
+    ctx.arcTo(bx + bw, by, bx + bw, by + r, r);
+    ctx.lineTo(bx + bw, by + bh - r);
+    ctx.arcTo(bx + bw, by + bh, bx + bw - r, by + bh, r);
+    ctx.lineTo(bx + r, by + bh);
+    ctx.arcTo(bx, by + bh, bx, by + bh - r, r);
+    ctx.lineTo(bx, by + r);
+    ctx.arcTo(bx, by, bx + r, by, r);
+    ctx.closePath();
+    ctx.fillStyle = _wpState.calBg;
+    ctx.fill();
+  }
+
   // 월 타이틀
   ctx.font = `900 104px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = C.title;
   ctx.textAlign = 'center';
   ctx.fillText(`${yr}년 ${mo}월`, calW / 2, 72);
 
-  // 구분선
-  ctx.strokeStyle = C.divider;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(0, headerH);
-  ctx.lineTo(calW, headerH);
-  ctx.stroke();
+
 
   // 요일 헤더
   WDAYS.forEach((w, i) => {
@@ -4864,6 +4900,18 @@ _initFetch.then(() => render()).catch(() => {});
     <div style="display:flex;gap:8px;margin-bottom:16px">
       <button id="wp-text-dark" onclick="wpSetTextMode('dark')" style="flex:1;padding:9px;background:rgba(255,255,255,0.15);border:2px solid #E31837;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">🌙 흰색 글자</button>
       <button id="wp-text-light" onclick="wpSetTextMode('light')" style="flex:1;padding:9px;background:#f0f0f0;border:2px solid transparent;border-radius:10px;color:#222;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">☀️ 검은 글자</button>
+    </div>
+
+    <!-- 달력 배경 -->
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px">🗓️ 달력 배경색</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
+      <button onclick="wpSetCalBg(null)" id="wp-calbg-none" style="padding:8px 14px;background:rgba(255,255,255,0.08);border:2px solid #E31837;border-radius:10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap">없음</button>
+      <button onclick="wpSetCalBg('rgba(255,255,255,0.88)')" id="wp-calbg-white" style="padding:8px 14px;background:#fff;border:2px solid transparent;border-radius:10px;color:#333;font-size:11px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap">흰색</button>
+      <button onclick="wpSetCalBg('rgba(0,0,0,0.55)')" id="wp-calbg-black" style="padding:8px 14px;background:rgba(0,0,0,0.6);border:2px solid transparent;border-radius:10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;white-space:nowrap">검정</button>
+      <label style="padding:8px 12px;background:rgba(255,255,255,0.08);border:2px solid transparent;border-radius:10px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px">
+        직접
+        <input type="color" value="#ffffff" oninput="wpSetCalBg(this.value)" style="width:22px;height:22px;border:none;background:none;cursor:pointer"/>
+      </label>
     </div>
 
     <!-- 달력 크기 -->
