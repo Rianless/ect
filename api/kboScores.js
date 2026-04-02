@@ -272,31 +272,51 @@ export default async function handler(req, res) {
     const action = req.query.action || '';
 
     if (gameId && action === 'lineup') {
-      // game-polling으로 textRelayData 포함 전체 응답 가져오기
       const inn = inning || 1;
-      const detail = await fetchGameDetail(gameId, inn);
-      let td = detail ? (detail.textRelayData || detail) : null;
-      let homeLineup = td?.homeLineup || detail?.homeLineup || null;
-      let awayLineup = td?.awayLineup || detail?.awayLineup || null;
 
-      // ★ game-polling에서 라인업 없으면 (BEFORE 경기 포함) lineup 전용 API로 재시도
-      if (!homeLineup && !awayLineup) {
-        const lineupRaw = await fetchLineup(gameId, inn);
-        if (lineupRaw) {
-          const lt = lineupRaw.textRelayData || lineupRaw;
-          homeLineup = lt.homeLineup || lineupRaw.homeLineup || null;
-          awayLineup = lt.awayLineup || lineupRaw.awayLineup || null;
-          if (!td) td = lineupRaw;
+      // 모든 경로에서 라인업을 꺼내는 헬퍼
+      function extractLineupPair(raw) {
+        if (!raw) return { homeLineup: null, awayLineup: null };
+        const td = raw.textRelayData || raw;
+        // 경로 1: 직접 homeLineup/awayLineup
+        let home = td.homeLineup || raw.homeLineup || null;
+        let away = td.awayLineup || raw.awayLineup || null;
+        // 경로 2: lineUpData 안 (preview/starting-lineup 응답)
+        if (!home || !away) {
+          const gp = raw.game || {};
+          const lu = raw.lineUpData || gp.lineUpData || {};
+          if (!home) home = lu.homeLineup || lu.homeTeamLineup || gp.homeLineup || gp.homeTeamLineup || null;
+          if (!away) away = lu.awayLineup || lu.awayTeamLineup || gp.awayLineup || gp.awayTeamLineup || null;
         }
+        // 경로 3: homeTeamLineup/awayTeamLineup 직접
+        if (!home) home = td.homeTeamLineup || raw.homeTeamLineup || null;
+        if (!away) away = td.awayTeamLineup || raw.awayTeamLineup || null;
+        return { homeLineup: home, awayLineup: away };
       }
 
-      if (!homeLineup && !awayLineup && !detail) {
+      // 1차: game-polling (LIVE/RESULT 경기에 적합)
+      let detail = await fetchGameDetail(gameId, inn);
+      let { homeLineup, awayLineup } = extractLineupPair(detail);
+
+      // 2차: 라인업 없으면 preview/starting-lineup/lineup 전용 API 시도
+      //      (BEFORE 경기 or game-polling에 라인업 미포함 경우)
+      if (!homeLineup && !awayLineup) {
+        const lineupRaw = await fetchLineup(gameId, inn);
+        const pair = extractLineupPair(lineupRaw);
+        homeLineup = pair.homeLineup;
+        awayLineup = pair.awayLineup;
+        if (!detail && lineupRaw) detail = lineupRaw;
+      }
+
+      if (!homeLineup && !awayLineup) {
         return res.status(404).json({ error: 'Lineup not found' });
       }
 
-      let gs = td?.currentGameState || detail?.currentGameState || null;
+      // currentGameState
+      const td = detail ? (detail.textRelayData || detail) : {};
+      let gs = td.currentGameState || detail?.currentGameState || null;
 
-      // pcode → 이름 맵 구성 (lineup 배열에서 pcode 추출)
+      // pcode → 이름 맵 구성
       const pcodeMap = {};
       const allPlayers = [
         ...(homeLineup?.batter || []), ...(homeLineup?.pitcher || []),
@@ -308,14 +328,8 @@ export default async function handler(req, res) {
       if (gs) {
         const isNumId = v => v && /^\d+$/.test(String(v));
         const resolveName = (nameField, idField) => {
-          // 이름 필드가 이미 문자열이면 그대로 사용
           if (nameField && !isNumId(nameField)) return nameField;
-          // ID 필드로 pcodeMap 조회
-          if (idField) {
-            const mapped = pcodeMap[String(idField)];
-            if (mapped) return mapped;
-          }
-          // 이름 필드가 숫자 ID면 비움
+          if (idField) { const mapped = pcodeMap[String(idField)]; if (mapped) return mapped; }
           return '';
         };
         gs = {
@@ -324,7 +338,9 @@ export default async function handler(req, res) {
           batterName:  resolveName(gs.batterName,  gs.batter),
         };
       }
-      // 응답: 표준화된 구조
+
+      console.log('[action=lineup] homeB:', homeLineup?.batter?.length, 'awayB:', awayLineup?.batter?.length);
+
       return res.status(200).json({
         homeLineup,
         awayLineup,
