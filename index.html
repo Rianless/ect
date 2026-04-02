@@ -2032,9 +2032,10 @@ let _wpState = {
   bgType: 'gradient',
   bgColor: '#1a1a2e',
   gradient: 'linear-gradient(160deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',
-  bgImage: null,   // 사용자 업로드 이미지 (Image 객체)
+  bgImage: null,
   calScale: 1.3,
   calOffsetY: 0,
+  textMode: 'dark',  // 'dark'=흰글자, 'light'=검은글자
 };
 
 function wpLoadBgImage(file) {
@@ -2082,6 +2083,21 @@ function wpPreloadLogos() {
 }
 
 // 프리셋 선택 — render() 없이 DOM만 업데이트
+function wpSetTextMode(mode) {
+  _wpState.textMode = mode;
+  const darkBtn = document.getElementById('wp-text-dark');
+  const lightBtn = document.getElementById('wp-text-light');
+  if (darkBtn) {
+    darkBtn.style.border = mode === 'dark' ? '2px solid #E31837' : '2px solid transparent';
+    darkBtn.style.background = mode === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)';
+  }
+  if (lightBtn) {
+    lightBtn.style.border = mode === 'light' ? '2px solid #E31837' : '2px solid transparent';
+    lightBtn.style.background = mode === 'light' ? '#f0f0f0' : 'rgba(240,240,240,0.7)';
+  }
+  drawWallpaperCanvas();
+}
+
 function wpSelectPreset(pi) {
   _wpState.bgType = 'gradient';
   _wpState.gradient = WP_PRESETS[pi].gradient;
@@ -2138,8 +2154,9 @@ async function openWallpaperMaker() {
     </label>`;
   }
 
-  // 슬라이더 초기값 동기화
+  // 슬라이더 + 토글 초기값 동기화
   wpUpdateLabels();
+  wpSetTextMode(_wpState.textMode);
 
   const loadingEl = document.getElementById('wp-loading');
   loadingEl.style.display = 'flex';
@@ -2220,6 +2237,26 @@ function wpParseGradient(ctx, str, W, H) {
 
 function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   const {yr, mo} = state;
+  const isLight = _wpState.textMode === 'light';
+  // 텍스트 모드에 따른 색상 팔레트
+  const C = {
+    title:   isLight ? 'rgba(0,0,0,0.9)'     : '#ffffff',
+    divider: isLight ? 'rgba(0,0,0,0.15)'    : 'rgba(255,255,255,0.18)',
+    wdaySun: isLight ? '#d32f2f'             : '#ff8a80',
+    wdaySat: isLight ? '#1565c0'             : '#80d8ff',
+    wday:    isLight ? 'rgba(0,0,0,0.45)'    : 'rgba(255,255,255,0.5)',
+    daySun:  isLight ? '#d32f2f'             : '#ff8a80',
+    daySat:  isLight ? '#1565c0'             : '#80d8ff',
+    day:     isLight ? 'rgba(0,0,0,0.9)'     : 'rgba(255,255,255,0.9)',
+    homeCircleFill:   'rgba(227,24,55,0.25)',
+    homeCircleStroke: 'rgba(227,24,55,0.85)',
+    todayFill:   isLight ? 'rgba(0,0,0,0.12)'    : 'rgba(255,255,255,0.2)',
+    todayStroke: isLight ? 'rgba(0,0,0,0.45)'    : 'rgba(255,255,255,0.55)',
+    legendText:  isLight ? 'rgba(0,0,0,0.5)'     : 'rgba(255,255,255,0.55)',
+    legendDiv:   isLight ? 'rgba(0,0,0,0.1)'     : 'rgba(255,255,255,0.12)',
+    watermark:   isLight ? 'rgba(0,0,0,0.18)'    : 'rgba(255,255,255,0.2)',
+    fallback:    isLight ? 'rgba(0,0,0,0.6)'     : 'rgba(255,255,255,0.7)',
+  };
   const WDAYS = ['일','월','화','수','목','금','토'];
   const f = fdow(yr, mo), days = dim(yr, mo);
   const _kn = new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));
@@ -2254,12 +2291,12 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
 
   // 월 타이틀
   ctx.font = `900 104px 'Noto Sans KR', sans-serif`;
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = C.title;
   ctx.textAlign = 'center';
   ctx.fillText(`${yr}년 ${mo}월`, calW / 2, 72);
 
   // 구분선
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.strokeStyle = C.divider;
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, headerH);
@@ -2269,7 +2306,7 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   // 요일 헤더
   WDAYS.forEach((w, i) => {
     ctx.font = `700 44px 'Noto Sans KR', sans-serif`;
-    ctx.fillStyle = i === 0 ? '#ff8a80' : i === 6 ? '#80d8ff' : 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = i === 0 ? C.wdaySun : i === 6 ? C.wdaySat : C.wday;
     ctx.textAlign = 'center';
     ctx.fillText(w, i * colW + colW / 2, headerH + wdayH - 24);
   });
@@ -2295,9 +2332,9 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
     if (isKiaHome) {
       ctx.beginPath();
       ctx.arc(cx, cy + 48, 56, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(227,24,55,0.3)';
+      ctx.fillStyle = C.homeCircleFill;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(227,24,55,0.85)';
+      ctx.strokeStyle = C.homeCircleStroke;
       ctx.lineWidth = 6;
       ctx.stroke();
     }
@@ -2305,15 +2342,15 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
     if (isToday) {
       ctx.beginPath();
       ctx.arc(cx, cy + 48, 56, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillStyle = C.todayFill;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.strokeStyle = C.todayStroke;
       ctx.lineWidth = 6;
       ctx.stroke();
     }
 
     // 날짜 숫자
-    const dayColor = dow === 0 ? '#ff8a80' : dow === 6 ? '#80d8ff' : 'rgba(255,255,255,0.9)';
+    const dayColor = dow === 0 ? C.daySun : dow === 6 ? C.daySat : C.day;
     ctx.font = `${isToday ? 800 : 500} 52px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = dayColor;
     ctx.textAlign = 'center';
@@ -2329,7 +2366,7 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
         ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
       } else {
         ctx.font = `700 36px 'Noto Sans KR', sans-serif`;
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillStyle = C.fallback;
         ctx.textAlign = 'center';
         ctx.fillText(oppKey, cx, cy + 140);
       }
@@ -2338,7 +2375,7 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
 
   // 구분선 (달력 아래)
   const legendY = headerH + wdayH + rows * rowH + 32;
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeStyle = C.legendDiv;
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(0, legendY);
@@ -2349,29 +2386,29 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   const ly = legendY + 72;
   ctx.beginPath();
   ctx.arc(64, ly - 16, 24, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(227,24,55,0.3)';
+  ctx.fillStyle = C.homeCircleFill;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(227,24,55,0.85)';
+  ctx.strokeStyle = C.homeCircleStroke;
   ctx.lineWidth = 4.8;
   ctx.stroke();
   ctx.font = `500 40px 'Noto Sans KR', sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillStyle = C.legendText;
   ctx.textAlign = 'left';
   ctx.fillText('홈경기', 104, ly);
 
   ctx.beginPath();
   ctx.arc(360, ly - 16, 24, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillStyle = C.todayFill;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.strokeStyle = C.todayStroke;
   ctx.lineWidth = 4.8;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillStyle = C.legendText;
   ctx.textAlign = 'left';
   ctx.fillText('오늘', 400, ly);
 
   ctx.font = `700 40px 'Noto Sans KR', sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillStyle = C.watermark;
   ctx.textAlign = 'right';
   ctx.fillText('horang2', calW, ly);
 
@@ -4820,6 +4857,13 @@ _initFetch.then(() => render()).catch(() => {});
     <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px">🎨 배경 색상</div>
     <div id="wp-preset-row" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;margin-bottom:16px;-webkit-overflow-scrolling:touch">
       <!-- JS로 채워짐 -->
+    </div>
+
+    <!-- 글자 색 토글 -->
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:8px">🔤 달력 글자색</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button id="wp-text-dark" onclick="wpSetTextMode('dark')" style="flex:1;padding:9px;background:rgba(255,255,255,0.15);border:2px solid #E31837;border-radius:10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">🌙 흰색 글자</button>
+      <button id="wp-text-light" onclick="wpSetTextMode('light')" style="flex:1;padding:9px;background:#f0f0f0;border:2px solid transparent;border-radius:10px;color:#222;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif">☀️ 검은 글자</button>
     </div>
 
     <!-- 달력 크기 -->
