@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="theme-color" content="#000000"/>
+  <title>할 일 목록</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ios-blue: #007AFF;
+      --ios-green: #34C759;
+      --ios-red: #FF3B30;
+      --ios-gray: #8E8E93;
+      --ios-bg: rgba(255,255,255,0.12);
+      --ios-card: rgba(255,255,255,0.18);
+      --ios-border: rgba(255,255,255,0.25);
+      --ios-text: #FFFFFF;
+      --ios-subtext: rgba(255,255,255,0.6);
+      --blur: blur(20px);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Noto Sans KR', -apple-system, 'SF Pro Display', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+      user-select: none;
+    }
+
+    body {
+      background: #000;
+      color: var(--ios-text);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* 안드로이드 배경화면 느낌 그라디언트 */
+    .wallpaper {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse at 20% 10%, rgba(100, 60, 200, 0.8) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(20, 100, 220, 0.7) 0%, transparent 45%),
+        radial-gradient(ellipse at 60% 80%, rgba(180, 30, 100, 0.6) 0%, transparent 50%),
+        radial-gradient(ellipse at 10% 90%, rgba(30, 150, 200, 0.5) 0%, transparent 45%),
+        linear-gradient(135deg, #0d0621 0%, #1a0a3d 30%, #0a1a3d 60%, #0d1a2d 100%);
+      animation: wallpaperShift 15s ease-in-out infinite alternate;
+    }
+
+    @keyframes wallpaperShift {
+      0%   { filter: hue-rotate(0deg) brightness(1); }
+      50%  { filter: hue-rotate(15deg) brightness(1.05); }
+      100% { filter: hue-rotate(-10deg) brightness(0.95); }
+    }
+
+    /* 별빛 효과 */
+    .stars {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .star {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: #fff;
+      border-radius: 50%;
+      animation: twinkle var(--dur, 3s) ease-in-out infinite;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.1; transform: scale(1); }
+      50%       { opacity: 0.9; transform: scale(1.4); }
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 0 40px 0;
+    }
+
+    /* 상단 상태바 영역 */
+    .status-bar {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.9);
+    }
+
+    /* 헤더 */
+    .header {
+      padding: 8px 20px 20px;
+    }
+    .header-date {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--ios-subtext);
+      margin-bottom: 4px;
+      letter-spacing: 0.3px;
+    }
+    .header-title {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+    }
+    .header-count {
+      font-size: 13px;
+      color: var(--ios-subtext);
+      margin-top: 6px;
+    }
+
+    /* 섹션 */
+    .section {
+      padding: 0 16px;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ios-subtext);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 0 4px;
+      margin-bottom: 8px;
+    }
+
+    /* 카드 컨테이너 (Frosted Glass) */
+    .card-list {
+      background: var(--ios-card);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--ios-border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    /* 투두 아이템 */
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      position: relative;
+    }
+    .todo-item:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 54px;
+      right: 0;
+      height: 0.5px;
+      background: rgba(255,255,255,0.12);
+    }
+    .todo-item:active {
+      background: rgba(255,255,255,0.08);
+    }
+
+    /* 체크 버튼 */
+    .check-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.4);
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+    }
+    .check-btn.checked {
+      background: var(--ios-green);
+      border-color: var(--ios-green);
+    }
+    .check-btn svg {
+      opacity: 0;
+      transform: scale(0.5);
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .check-btn.checked svg {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .todo-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .todo-text {
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 1.3;
+      transition: all 0.25s ease;
+      word-break: break-all;
+    }
+    .todo-item.done .todo-text {
+      text-decoration: line-through;
+      color: var(--ios-subtext);
+    }
+    .todo-meta {
+      font-size: 12px;
+      color: var(--ios-subtext);
+      margin-top: 2px;
+    }
+
+    /* 삭제 버튼 */
+    .delete-btn {
+      width: 22px;
+      height: 22px;
+      background: rgba(255,59,48,0.25);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .todo-item:hover .delete-btn,
+    .todo-item:focus-within .delete-btn {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* 빈 상태 */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--ios-subtext);
+    }
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.6;
+    }
+    .empty-text {
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .empty-sub {
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    /* 입력 영역 */
+    .input-section {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 12px 16px max(16px, env(safe-area-inset-bottom));
+      background: rgba(10, 5, 30, 0.6);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-top: 0.5px solid rgba(255,255,255,0.12);
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 14px;
+      padding: 4px 4px 4px 14px;
+    }
+    .input-row.focused {
+      border-color: var(--ios-blue);
+      box-shadow: 0 0 0 3px rgba(0,122,255,0.2);
+    }
+    #todo-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-size: 16px;
+      font-family: 'Noto Sans KR', sans-serif;
+      color: #fff;
+      padding: 8px 0;
+    }
+    #todo-input::placeholder {
+      color: rgba(255,255,255,0.35);
+    }
+    .add-btn {
+      width: 36px;
+      height: 36px;
+      background: var(--ios-blue);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+    }
+    .add-btn:active {
+      transform: scale(0.9);
+      background: #0066d6;
+    }
+    .add-btn:disabled {
+      background: rgba(255,255,255,0.15);
+      cursor: not-allowed;
+    }
+
+    /* 진행률 바 */
+    .progress-section {
+      padding: 0 16px;
+      margin-bottom: 20px;
+    }
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .progress-label {
+      font-size: 13px;
+      color: var(--ios-subtext);
+    }
+    .progress-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ios-green);
+    }
+    .progress-track {
+      height: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--ios-blue), var(--ios-green));
+      border-radius: 3px;
+      transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* 탭 필터 */
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 0 16px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .filter-tabs::-webkit-scrollbar { display: none; }
+    .filter-tab {
+      flex-shrink: 0;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--ios-subtext);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .filter-tab.active {
+      background: var(--ios-blue);
+      border-color: var(--ios-blue);
+      color: #fff;
+    }
+
+    /* 애니메이션 */
+    @keyframes slideInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: scale(1); max-height: 100px; }
+      to   { opacity: 0; transform: scale(0.9); max-height: 0; padding-top: 0; padding-bottom: 0; }
+    }
+    .todo-item.new-item {
+      animation: slideInUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    .todo-item.removing {
+      animation: fadeOut 0.25s ease forwards;
+      overflow: hidden;
+    }
+
+    /* 우선순위 점 */
+    .priority-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .priority-high   { background: var(--ios-red); }
+    .priority-medium { background: #FF9500; }
+    .priority-low    { background: var(--ios-green); }
+
+    /* 시계 위젯 */
+    .clock-widget {
+      text-align: center;
+      padding: 20px 20px 16px;
+    }
+    .clock-time {
+      font-size: 56px;
+      font-weight: 200;
+      letter-spacing: -2px;
+      line-height: 1;
+    }
+    .clock-date-full {
+      font-size: 14px;
+      color: var(--ios-subtext);
+      margin-top: 6px;
+      font-weight: 300;
+    }
+
+    /* 스크롤 여백 */
+    .scroll-pad { height: 90px; }
+  </style>
+</head>
+<body>
+
+<div class="wallpaper"></div>
+<div class="stars" id="stars"></div>
+
+<div class="app">
+  <!-- 상태바 -->
+  <div class="status-bar">
+    <span id="status-time">9:41</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="white">
+        <rect x="0" y="4" width="3" height="8" rx="1" opacity="0.4"/>
+        <rect x="4" y="2" width="3" height="10" rx="1" opacity="0.6"/>
+        <rect x="8" y="0" width="3" height="12" rx="1" opacity="0.8"/>
+        <rect x="12" y="0" width="3" height="12" rx="1"/>
+      </svg>
+      <svg width="16" height="12" viewBox="0 0 24 12" fill="white">
+        <rect x="0" y="1" width="21" height="10" rx="2.5" stroke="white" stroke-width="1" fill="none" opacity="0.5"/>
+        <rect x="22" y="4" width="2" height="4" rx="1" fill="white" opacity="0.5"/>
+        <rect x="1.5" y="2.5" width="16" height="7" rx="1.5" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- 시계 위젯 -->
+  <div class="clock-widget">
+    <div class="clock-time" id="clock">00:00</div>
+    <div class="clock-date-full" id="clock-date">2026년 4월 2일 목요일</div>
+  </div>
+
+  <!-- 진행률 -->
+  <div class="progress-section">
+    <div class="progress-header">
+      <span class="progress-label">오늘의 달성률</span>
+      <span class="progress-value" id="progress-pct">0%</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- 필터 탭 -->
+  <div class="filter-tabs">
+    <div class="filter-tab active" data-filter="all">전체</div>
+    <div class="filter-tab" data-filter="active">진행 중</div>
+    <div class="filter-tab" data-filter="done">완료</div>
+  </div>
+
+  <!-- 헤더 -->
+  <div class="header">
+    <div class="header-date" id="header-date">오늘</div>
+    <div class="header-title">할 일 목록</div>
+    <div class="header-count" id="header-count">항목 없음</div>
+  </div>
+
+  <!-- 할 일 목록 -->
+  <div class="section">
+    <div class="card-list" id="todo-list">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-text">할 일이 없어요</div>
+        <div class="empty-sub">아래에서 새 항목을 추가해보세요</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll-pad"></div>
+</div>
+
+<!-- 입력 영역 -->
+<div class="input-section">
+  <div class="input-row" id="input-row">
+    <input
+      type="text"
+      id="todo-input"
+      placeholder="새 할 일 추가..."
+      maxlength="80"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+    />
+    <button class="add-btn" id="add-btn" disabled>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <path d="M9 3.5V14.5M3.5 9H14.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  // ── 별빛 생성 ──────────────────────────────────────────────
+  (function createStars() {
+    const container = document.getElementById('stars');
+    for (let i = 0; i < 80; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      s.style.cssText = `
+        left:${Math.random()*100}%;
+        top:${Math.random()*100}%;
+        --dur:${2 + Math.random() * 4}s;
+        animation-delay:${Math.random() * 4}s;
+        width:${Math.random() > 0.85 ? 3 : 2}px;
+        height:${Math.random() > 0.85 ? 3 : 2}px;
+        opacity:${0.2 + Math.random() * 0.5};
+      `;
+      container.appendChild(s);
+    }
+  })();
+
+  // ── 시계 ────────────────────────────────────────────────────
+  const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+  function updateClock() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    document.getElementById('clock').textContent = `${hh}:${mm}`;
+    document.getElementById('status-time').textContent = `${hh}:${mm}`;
+    document.getElementById('clock-date').textContent =
+      `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일 ${DAYS[now.getDay()]}요일`;
+    document.getElementById('header-date').textContent =
+      `${now.getMonth()+1}월 ${now.getDate()}일 ${DAYS[now.getDay()]}요일`;
+  }
+  updateClock();
+  setInterval(updateClock, 10000);
+
+  // ── 데이터 ──────────────────────────────────────────────────
+  let todos = JSON.parse(localStorage.getItem('ios-todos') || '[]');
+  let filter = 'all';
+
+  function save() {
+    localStorage.setItem('ios-todos', JSON.stringify(todos));
+  }
+
+  function getFiltered() {
+    if (filter === 'active') return todos.filter(t => !t.done);
+    if (filter === 'done')   return todos.filter(t => t.done);
+    return todos;
+  }
+
+  // ── 렌더링 ──────────────────────────────────────────────────
+  function render(newId) {
+    const list = document.getElementById('todo-list');
+    const filtered = getFiltered();
+    const empty = document.getElementById('empty-state');
+
+    // 진행률
+    const total = todos.length;
+    const done  = todos.filter(t => t.done).length;
+    const pct   = total === 0 ? 0 : Math.round(done / total * 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent  = pct + '%';
+
+    // 헤더 카운트
+    const active = total - done;
+    document.getElementById('header-count').textContent =
+      total === 0
+        ? '항목 없음'
+        : `${active}개 남음 · 총 ${total}개`;
+
+    // 기존 아이템 제거 (empty 제외)
+    Array.from(list.children).forEach(el => {
+      if (el.id !== 'empty-state') el.remove();
+    });
+
+    if (filtered.length === 0) {
+      empty.style.display = '';
+      empty.querySelector('.empty-text').textContent =
+        filter === 'done'   ? '완료된 항목이 없어요' :
+        filter === 'active' ? '진행 중인 항목이 없어요' : '할 일이 없어요';
+      return;
+    }
+    empty.style.display = 'none';
+
+    filtered.forEach(todo => {
+      const item = document.createElement('div');
+      item.className = 'todo-item' + (todo.done ? ' done' : '') + (todo.id === newId ? ' new-item' : '');
+      item.dataset.id = todo.id;
+      item.innerHTML = `
+        <button class="check-btn ${todo.done ? 'checked' : ''}" aria-label="완료 토글">
+          <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+            <path d="M1.5 5L5.5 9L12.5 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="todo-content">
+          <div class="todo-text">${escapeHtml(todo.text)}</div>
+          <div class="todo-meta">${todo.timeStr}</div>
+        </div>
+        <button class="delete-btn" aria-label="삭제">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M1.5 1.5L10.5 10.5M10.5 1.5L1.5 10.5" stroke="rgba(255,59,48,0.9)" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+      `;
+
+      item.querySelector('.check-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        toggleDone(todo.id);
+      });
+      item.querySelector('.delete-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        deleteTodo(todo.id, item);
+      });
+
+      list.appendChild(item);
+    });
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── CRUD ────────────────────────────────────────────────────
+  function addTodo(text) {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const todo = {
+      id: Date.now(),
+      text: text.trim(),
+      done: false,
+      timeStr: `${now.getMonth()+1}/${now.getDate()} ${hh}:${mm}`
+    };
+    todos.unshift(todo);
+    save();
+    render(todo.id);
+  }
+
+  function toggleDone(id) {
+    const t = todos.find(t => t.id === id);
+    if (t) { t.done = !t.done; save(); render(); }
+  }
+
+  function deleteTodo(id, el) {
+    el.classList.add('removing');
+    setTimeout(() => {
+      todos = todos.filter(t => t.id !== id);
+      save();
+      render();
+    }, 240);
+  }
+
+  // ── 입력 ────────────────────────────────────────────────────
+  const input   = document.getElementById('todo-input');
+  const addBtn  = document.getElementById('add-btn');
+  const inputRow = document.getElementById('input-row');
+
+  input.addEventListener('input', () => {
+    addBtn.disabled = input.value.trim().length === 0;
+  });
+  input.addEventListener('focus', () => inputRow.classList.add('focused'));
+  input.addEventListener('blur',  () => inputRow.classList.remove('focused'));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && input.value.trim()) submit();
+  });
+  addBtn.addEventListener('click', submit);
+
+  function submit() {
+    const text = input.value.trim();
+    if (!text) return;
+    addTodo(text);
+    input.value = '';
+    addBtn.disabled = true;
+    input.focus();
+  }
+
+  // ── 필터 탭 ─────────────────────────────────────────────────
+  document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      filter = tab.dataset.filter;
+      render();
+    });
+  });
+
+  // ── 초기 렌더 ───────────────────────────────────────────────
+  render();
+
+  // ── 기본 데모 항목 (처음 방문 시) ───────────────────────────
+  if (todos.length === 0) {
+    const demos = ['운동 30분 하기', '물 2리터 마시기', '독서 20페이지'];
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    demos.forEach((text, i) => {
+      todos.push({
+        id: Date.now() + i,
+        text,
+        done: i === 1,
+        timeStr: `${now.getMonth()+1}/${now.getDate()} ${hh}:${mm}`
+      });
+    });
+    save();
+    render();
+  }
+</script>
+</body>
+</html>
