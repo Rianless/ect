@@ -273,28 +273,39 @@ export default async function handler(req, res) {
       const teamCode   = req.query.teamCode   || 'HT';
       const seasonCode = req.query.seasonCode || '2026';
 
-      const orderBy  = tab === 'hitter' ? 'hitterHra'  : 'pitcherEra';
-      const orderDir = tab === 'hitter' ? 'desc'        : 'asc';
-
+      // 네이버 API — 다양한 경로/파라미터 조합 fallback
       const urls = [
-        `https://api-gw.sports.naver.com/kbaseball/record/team/player?teamCode=${teamCode}&seasonCode=${seasonCode}&tab=${tab}&orderBy=${orderBy}&orderType=${orderDir}&pageNum=1&pageSize=100`,
-        `https://api-gw.sports.naver.com/kbaseball/stat/players?categoryId=kbo&seasonCode=${seasonCode}&teamCode=${teamCode}&tab=${tab}`,
-        `https://api-gw.sports.naver.com/kbaseball/stats/players?categoryId=kbo&season=${seasonCode}&teamCode=${teamCode}&type=${tab}`,
+        // 시즌 기록 직접 조회
+        `https://api-gw.sports.naver.com/kbaseball/stats/player?year=${seasonCode}&teamCode=${teamCode}&tab=${tab}&pageNum=1&pageSize=100`,
+        `https://api-gw.sports.naver.com/kbaseball/stats/player?seasonCode=${seasonCode}&teamCode=${teamCode}&tab=${tab}&pageNum=1&pageSize=100`,
+        `https://api-gw.sports.naver.com/kbaseball/player/rank?year=${seasonCode}&teamCode=${teamCode}&tab=${tab}&pageNum=1&pageSize=100`,
+        `https://api-gw.sports.naver.com/kbaseball/player/rank?seasonCode=${seasonCode}&teamCode=${teamCode}&tab=${tab}&pageNum=1&pageSize=100`,
+        `https://api-gw.sports.naver.com/kbaseball/record/team/player?teamCode=${teamCode}&year=${seasonCode}&tab=${tab}&pageNum=1&pageSize=100`,
+        `https://api-gw.sports.naver.com/kbaseball/record/team/player?teamCode=${teamCode}&seasonCode=${seasonCode}&tab=${tab}&pageNum=1&pageSize=100`,
+        `https://api-gw.sports.naver.com/kbaseball/stats/players?categoryId=kbo&year=${seasonCode}&teamCode=${teamCode}&tab=${tab}`,
+        `https://api-gw.sports.naver.com/kbaseball/stat/player?categoryId=kbo&year=${seasonCode}&teamCode=${teamCode}&tab=${tab}`,
+        `https://api-gw.sports.naver.com/kbaseball/stat/player?categoryId=kbo&seasonCode=${seasonCode}&teamCode=${teamCode}&tab=${tab}`,
+        `https://api-gw.sports.naver.com/kbaseball/stats/rank/player?year=${seasonCode}&teamCode=${teamCode}&position=${tab}&pageSize=100`,
+        // sports.news.naver.com (구 API)
+        `https://sports.news.naver.com/kbaseball/stats/player.nhn?year=${seasonCode}&teamCode=${teamCode}&tab=${tab}&pageNum=1&pageSize=100`,
       ];
 
+      const triedLog = [];
       for (const url of urls) {
         try {
           const r = await fetch(url, { headers: HEADERS });
-          if (!r.ok) { console.log('[playerStats] skip', r.status, url); continue; }
+          triedLog.push(`${r.status}:${url.replace('https://','').split('?')[0]}`);
+          if (!r.ok) continue;
           const data = await r.json();
           const result = data?.result || data || {};
           const players = result.seasonPlayerStats || result.playerList || result.players || result.list || null;
-          if (!players || !players.length) { console.log('[playerStats] empty', url); continue; }
+          if (!players || !players.length) { triedLog[triedLog.length-1] += '(empty)'; continue; }
           console.log('[playerStats] ok', url, 'count:', players.length);
           return res.status(200).json({ result: { seasonPlayerStats: players } });
-        } catch(e) { console.log('[playerStats] err', url, e.message); }
+        } catch(e) { triedLog.push(`ERR:${url.replace('https://','').split('?')[0]}(${e.message})`); }
       }
-      return res.status(404).json({ error: '선수 데이터를 가져오지 못했어요' });
+      console.log('[playerStats] all failed:', triedLog.join(' | '));
+      return res.status(404).json({ error: '선수 데이터를 가져오지 못했어요', debug: triedLog });
     }
 
     if (gameId && action === 'lineup') {

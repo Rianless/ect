@@ -1311,7 +1311,8 @@ window._fetchPlayerStats = async function(tab) {
     const pr = await fetch(proxyUrl);
     if (!pr.ok) {
       const errData = await pr.json().catch(() => ({}));
-      throw new Error(errData.error || `서버 오류 ${pr.status}`);
+      const debugStr = errData.debug ? '\n' + errData.debug.join('\n') : '';
+      throw new Error((errData.error || `서버 오류 ${pr.status}`) + debugStr);
     }
     const pd = await pr.json();
     players = extractPlayers(pd);
