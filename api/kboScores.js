@@ -271,7 +271,90 @@ export default async function handler(req, res) {
     const inning = req.query.inning ? parseInt(req.query.inning) : null;
     const action = req.query.action || '';
 
+    if (gameId && action === 'lineup') {
+      // game-polling으로 textRelayData 포함 전체 응답 가져오기
+      const inn = inning || 1;
+      const detail = await fetchGameDetail(gameId, inn);
+      if (!detail) {
+        // fallback: lineup 전용 API
+        const lineupRaw = await fetchLineup(gameId, inn);
+        if (!lineupRaw) return res.status(404).json({ error: 'Lineup not found' });
+        return res.status(200).json(lineupRaw);
+      }
+      // textRelayData 안의 homeLineup/awayLineup 추출
+      const td = detail.textRelayData || detail;
+      const homeLineup = td.homeLineup || detail.homeLineup || null;
+      const awayLineup = td.awayLineup || detail.awayLineup || null;
+      let gs = td.currentGameState || detail.currentGameState || null;
+
+      // pcode → 이름 맵 구성 (lineup 배열에서 pcode 추출)
+      const pcodeMap = {};
+      const allPlayers = [
+        ...(homeLineup?.batter || []), ...(homeLineup?.pitcher || []),
+        ...(awayLineup?.batter || []), ...(awayLineup?.pitcher || []),
+      ];
+      allPlayers.forEach(p => { if (p.pcode) pcodeMap[String(p.pcode)] = p.name || p.playerName || ''; });
+
+      // currentGameState의 pitcher/batter ID를 이름으로 변환
+      if (gs) {
+        const isNumId = v => v && /^\d+$/.test(String(v));
+        const resolveName = (nameField, idField) => {
+          // 이름 필드가 이미 문자열이면 그대로 사용
+          if (nameField && !isNumId(nameField)) return nameField;
+          // ID 필드로 pcodeMap 조회
+          if (idField) {
+            const mapped = pcodeMap[String(idField)];
+            if (mapped) return mapped;
+          }
+          // 이름 필드가 숫자 ID면 비움
+          return '';
+        };
+        gs = {
+          ...gs,
+          pitcherName: resolveName(gs.pitcherName, gs.pitcher),
+          batterName:  resolveName(gs.batterName,  gs.batter),
+        };
+      }
+      // 응답: 표준화된 구조
+      return res.status(200).json({
+        homeLineup,
+        awayLineup,
+        currentGameState: gs,
+        pcodeMap,
+        _raw_keys: Object.keys(td).slice(0, 20),
+      });
+    }
+
+    if (gameId) {
+      const m = String(gameId).match(/^(\d{4})(\d{2})(\d{2})/);
+      const gameDateDash = m ? `${m[1]}-${m[2]}-${m[3]}` : todayDash;
+      const rawGames = await fetchSchedule(gameDateDash);
+      const g = rawGames.find(x => String(x.gameId) === String(gameId));
+      if (!g) return res.status(404).json({ error: 'Game not found' });
+      const detail = await fetchGameDetail(gameId, inning || (g.statusCode==='RESULT' ? 9 : 1));
+      return res.status(200).json(convertGame(g, detail));
+    }
+
+    const rawGames = await fetchSchedule(todayDash);
+    // LIVE/RESULT 경기는 game-polling으로 이닝 스코어+currentGameState 확보
+    // BEFORE 경기는 lineup으로 선발 정보만 확보
+    const detailMap = {};
+    await Promise.all(rawGames.map(async g => {
+      try {
+        if (g.statusCode === 'STARTED' || g.statusCode === 'RESULT') {
+          const inn = g.statusCode === 'RESULT' ? 9 : 1;
+          const d = await fetchGameDetail(g.gameId, inn);
+          if (d) detailMap[g.gameId] = d;
+        } else {
+          const lu = await fetchLineup(g.gameId, 1);
+          if (lu) detailMap[g.gameId] = lu;
+        }
+      } catch(e) {}
+    }));
+    const allGames = rawGames.map(g => convertGame(g, detailMap[g.gameId] || null));
+    return res.status(200).json({ games: allGames, date: todayStr });
   } catch(e) {
     return res.status(500).json({ error: e.message });
   }
 }
+
