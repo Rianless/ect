@@ -2121,6 +2121,7 @@ function wpSetTextMode(mode) {
 function wpSelectPreset(pi) {
   _wpState.bgType = 'gradient';
   _wpState.gradient = WP_PRESETS[pi].gradient;
+  _wpState.bgImage = null;
   WP_PRESETS.forEach((_, i) => {
     const btn = document.getElementById('wp-preset-' + i);
     if (btn) btn.style.border = '2px solid ' + (i === pi ? '#E31837' : 'transparent');
@@ -2166,7 +2167,7 @@ async function openWallpaperMaker() {
     ).join('') +
     `<label style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap;flex-shrink:0">
       🎨 직접
-      <input type="color" value="${_wpState.bgColor}" onchange="_wpState.bgType='solid';_wpState.bgColor=this.value;drawWallpaperCanvas()" style="width:22px;height:22px;border:none;background:none;cursor:pointer"/>
+      <input type="color" value="${_wpState.bgColor}" onchange="_wpState.bgType='solid';_wpState.bgColor=this.value;_wpState.bgImage=null;drawWallpaperCanvas()" style="width:22px;height:22px;border:none;background:none;cursor:pointer"/>
     </label>
     <label id="wp-photo-btn" style="padding:7px 12px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba(255,255,255,0.07)">
       📷 내 사진
@@ -2374,20 +2375,11 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
       ctx.lineWidth = 6;
       ctx.stroke();
     }
-    // 오늘 원
-    if (isToday) {
-      ctx.beginPath();
-      ctx.arc(cx, cy + 48, 56, 0, Math.PI * 2);
-      ctx.fillStyle = C.todayFill;
-      ctx.fill();
-      ctx.strokeStyle = C.todayStroke;
-      ctx.lineWidth = 6;
-      ctx.stroke();
-    }
+
 
     // 날짜 숫자
     const dayColor = dow === 0 ? C.daySun : dow === 6 ? C.daySat : C.day;
-    ctx.font = `${isToday ? 800 : 500} 52px 'Noto Sans KR', sans-serif`;
+    ctx.font = `500 52px 'Noto Sans KR', sans-serif`;
     ctx.fillStyle = dayColor;
     ctx.textAlign = 'center';
     ctx.fillText(String(i), cx, cy + 68);
@@ -2432,16 +2424,7 @@ function wpDrawCalendar(ctx, W, H, scale, offsetYPct) {
   ctx.textAlign = 'left';
   ctx.fillText('홈경기', 104, ly);
 
-  ctx.beginPath();
-  ctx.arc(360, ly - 16, 24, 0, Math.PI * 2);
-  ctx.fillStyle = C.todayFill;
-  ctx.fill();
-  ctx.strokeStyle = C.todayStroke;
-  ctx.lineWidth = 4.8;
-  ctx.stroke();
-  ctx.fillStyle = C.legendText;
-  ctx.textAlign = 'left';
-  ctx.fillText('오늘', 400, ly);
+
 
   ctx.font = `700 40px 'Noto Sans KR', sans-serif`;
   ctx.fillStyle = C.watermark;
