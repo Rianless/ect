@@ -1414,10 +1414,20 @@ function renderPitcherTable(d, players) {
 function renderBaseballRecord(d) {
   const rt = state.recordTab || 'game';
 
-  // ── 서브탭 헤더 없음 (경기기록만) ──
-  let html = '';
+  // ── 서브탭 (경기기록 / 타자 / 투수) ──
+  const tabs = [
+    { key: 'game',    label: '경기기록' },
+    { key: 'hitter',  label: '타자' },
+    { key: 'pitcher', label: '투수' },
+  ];
+  let html = '<div style="display:flex;gap:6px;margin-bottom:16px">';
+  tabs.forEach(t => {
+    const active = rt === t.key;
+    html += `<button onclick="window._setRecordTab('${t.key}')" style="flex:1;padding:8px 0;font-size:12px;font-weight:${active?'800':'600'};border-radius:10px;border:1.5px solid ${active?'#E31837':d.bgB};background:${active?'#E31837':'transparent'};color:${active?'#fff':d.sub};font-family:'Noto Sans KR',sans-serif;cursor:pointer;transition:all .15s">${t.label}</button>`;
+  });
+  html += '</div>';
 
-  if (true) {
+  if (rt === 'game') {
     html += _renderGameRecord(d);
     return html;
   }

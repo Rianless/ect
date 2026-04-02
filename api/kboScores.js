@@ -268,6 +268,35 @@ export default async function handler(req, res) {
     const inning = req.query.inning ? parseInt(req.query.inning) : null;
     const action = req.query.action || '';
 
+    if (action === 'playerStats') {
+      const tab        = req.query.tab        || 'hitter';
+      const teamCode   = req.query.teamCode   || 'HT';
+      const seasonCode = req.query.seasonCode || '2026';
+
+      const orderBy  = tab === 'hitter' ? 'hitterHra'  : 'pitcherEra';
+      const orderDir = tab === 'hitter' ? 'desc'        : 'asc';
+
+      const urls = [
+        `https://api-gw.sports.naver.com/kbaseball/record/team/player?teamCode=${teamCode}&seasonCode=${seasonCode}&tab=${tab}&orderBy=${orderBy}&orderType=${orderDir}&pageNum=1&pageSize=100`,
+        `https://api-gw.sports.naver.com/kbaseball/stat/players?categoryId=kbo&seasonCode=${seasonCode}&teamCode=${teamCode}&tab=${tab}`,
+        `https://api-gw.sports.naver.com/kbaseball/stats/players?categoryId=kbo&season=${seasonCode}&teamCode=${teamCode}&type=${tab}`,
+      ];
+
+      for (const url of urls) {
+        try {
+          const r = await fetch(url, { headers: HEADERS });
+          if (!r.ok) { console.log('[playerStats] skip', r.status, url); continue; }
+          const data = await r.json();
+          const result = data?.result || data || {};
+          const players = result.seasonPlayerStats || result.playerList || result.players || result.list || null;
+          if (!players || !players.length) { console.log('[playerStats] empty', url); continue; }
+          console.log('[playerStats] ok', url, 'count:', players.length);
+          return res.status(200).json({ result: { seasonPlayerStats: players } });
+        } catch(e) { console.log('[playerStats] err', url, e.message); }
+      }
+      return res.status(404).json({ error: '선수 데이터를 가져오지 못했어요' });
+    }
+
     if (gameId && action === 'lineup') {
       const inn = inning || 1;
 
