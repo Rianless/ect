@@ -1,6 +1,4 @@
 // scripts/fetch-stats.js
-// GitHub Actions에서 실행 — 스탯티즈에서 KIA 선수 데이터 수집
-
 import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 import fs from 'fs';
@@ -8,60 +6,72 @@ import path from 'path';
 
 const YEAR = new Date().getFullYear();
 
-async function fetchStatiz(type) {
-  // type: 'HRA_CN' (타자), 'ERA_CN' (투수)
-  const isHitter = type === 'HRA_CN';
-  const teamParam = encodeURIComponent('KIA 타이거즈');
-  const url = `https://www.statiz.co.kr/stat.php?opt=0&sopt=0&re=0&ys=${YEAR}&ye=${YEAR}&se=0&te=${teamParam}&tm=&ty=0&qu=auto&po=0&as=&ae=&hi=&un=&pl=&da=1&o1=${type}&o2=&de=1&lr=0&tr=&cv=&ml=1&sn=50&si=&cn=50`;
+async function fetchKBO(type) {
+  const isHitter = type === 'hitter';
+  // KBO 공식 선수 기록 페이지 (서버사이드 렌더링 — Actions에서는 접근 가능)
+  const url = isHitter
+    ? `https://www.koreabaseball.com/Record/Player/HitterBasic/BasicRecord.aspx?leagueId=1&teamCode=HT&sort=HRA_CN`
+    : `https://www.koreabaseball.com/Record/Player/PitcherBasic/BasicRecord.aspx?leagueId=1&teamCode=HT&sort=ERA_CN`;
 
+  console.log(`[fetch-stats] ${type} URL: ${url}`);
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Referer': 'https://www.statiz.co.kr/',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Referer': 'https://www.koreabaseball.com/',
+      'Accept': 'text/html,application/xhtml+xml',
       'Accept-Language': 'ko-KR,ko;q=0.9',
-      'Cookie': 'statiz_lang=ko',
     }
   });
 
-  if (!res.ok) throw new Error(`statiz ${type} → ${res.status}`);
+  console.log(`[fetch-stats] ${type} status: ${res.status}`);
+  if (!res.ok) throw new Error(`KBO ${type} → ${res.status}`);
+
   const html = await res.text();
   const $ = cheerio.load(html);
   const players = [];
 
-  $('tbody tr').each((_, row) => {
+  // KBO 공식 사이트는 서버사이드 렌더링 — tbody에 데이터 있음
+  $('div.record_result table tbody tr').each((_, row) => {
     const cells = $(row).find('td').map((_, td) => $(td).text().trim()).get();
     if (cells.length < 5) return;
-
     const name = cells[1];
-    if (!name || /^\d+$/.test(name) || name === '선수') return;
+    if (!name || name === '선수명') return;
 
     if (isHitter) {
       players.push({
         playerName: name,
-        hitterGame: cells[3] || '',
-        hitterHra:  cells[16] || '',  // AVG
-        hitterHit:  cells[6]  || '',  // H
-        hitterHr:   cells[9]  || '',  // HR
-        hitterRbi:  cells[11] || '',  // RBI
-        hitterRun:  cells[10] || '',  // R
-        hitterObp:  cells[17] || '',  // OBP
-        hitterOps:  cells[19] || '',  // OPS
+        hitterGame: cells[2]  || '',
+        hitterHra:  cells[4]  || '',
+        hitterHit:  cells[8]  || '',
+        hitterHr:   cells[11] || '',
+        hitterRbi:  cells[12] || '',
+        hitterRun:  cells[10] || '',
+        hitterObp:  cells[14] || '',
+        hitterOps:  cells[16] || '',
       });
     } else {
       players.push({
         playerName:  name,
-        pitcherGame: cells[3]  || '',
-        pitcherWin:  cells[4]  || '',  // W
-        pitcherLose: cells[5]  || '',  // L
-        pitcherSv:   cells[6]  || '',  // SV
-        pitcherHld:  cells[7]  || '',  // HLD
-        pitcherIp:   cells[8]  || '',  // IP
-        pitcherKk:   cells[13] || '',  // SO
-        pitcherEra:  cells[14] || '',  // ERA
-        pitcherWhip: cells[15] || '',  // WHIP
+        pitcherGame: cells[2]  || '',
+        pitcherEra:  cells[4]  || '',
+        pitcherWin:  cells[5]  || '',
+        pitcherLose: cells[6]  || '',
+        pitcherSv:   cells[7]  || '',
+        pitcherHld:  cells[8]  || '',
+        pitcherIp:   cells[10] || '',
+        pitcherKk:   cells[15] || '',
+        pitcherWhip: cells[18] || '',
       });
     }
   });
+
+  console.log(`[fetch-stats] ${type} parsed: ${players.length}명`);
+
+  // 파싱 실패시 테이블 구조 디버그
+  if (players.length === 0) {
+    const tbodyHtml = $('div.record_result table tbody').html() || '';
+    console.log(`[fetch-stats] tbody preview: ${tbodyHtml.slice(0, 300)}`);
+  }
 
   return players;
 }
@@ -70,11 +80,9 @@ async function main() {
   console.log(`[fetch-stats] ${YEAR}시즌 KIA 데이터 수집 시작`);
 
   const [hitters, pitchers] = await Promise.all([
-    fetchStatiz('HRA_CN'),
-    fetchStatiz('ERA_CN'),
+    fetchKBO('hitter'),
+    fetchKBO('pitcher'),
   ]);
-
-  console.log(`[fetch-stats] 타자 ${hitters.length}명, 투수 ${pitchers.length}명`);
 
   const output = {
     updatedAt: new Date().toISOString(),
@@ -83,7 +91,6 @@ async function main() {
     pitchers,
   };
 
-  // public/ 폴더 없으면 생성
   const dir = path.resolve('public');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
@@ -92,7 +99,7 @@ async function main() {
     JSON.stringify(output, null, 2),
     'utf-8'
   );
-  console.log('[fetch-stats] public/kia-stats.json 저장 완료');
+  console.log(`[fetch-stats] 저장 완료 — 타자 ${hitters.length}명, 투수 ${pitchers.length}명`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
