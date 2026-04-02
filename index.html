@@ -2064,26 +2064,33 @@ const WP_PRESETS = [
 ];
 
 // 팀 약칭 (캔버스에 텍스트로 표시)
-// 팀 로고 캐시 — crossOrigin 없이 로드, 로드 완료 시 캔버스 재드로우
+// 팀 로고 캐시 — fetch→blob URL로 CORS taint 완전 우회
 const _wpLogoCache = {};
+const _wpLogoLoading = {};
+
 function wpPreloadLogos() {
-  // 1) 즉시 resolve — 캔버스 먼저 그림
-  // 2) 각 로고는 백그라운드 로드 후 완료되면 재드로우
+  // 즉시 캔버스 그리고, 로고는 백그라운드 로드
   Object.keys(T).forEach(key => {
-    if (_wpLogoCache[key]) return;
-    const img = new Image();
-    // crossOrigin 없이 로드 (캔버스 taint는 toDataURL 시 처리)
-    img.onload = () => {
-      _wpLogoCache[key] = img;
-      // 패널이 열려있으면 재드로우
-      if (document.getElementById('wallpaper-panel').classList.contains('open')) {
-        drawWallpaperCanvas();
-      }
-    };
-    img.onerror = () => { _wpLogoCache[key] = null; };
-    img.src = T[key].img;
+    if (_wpLogoCache[key] || _wpLogoLoading[key]) return;
+    _wpLogoLoading[key] = true;
+    fetch(T[key].img)
+      .then(r => r.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          _wpLogoCache[key] = img;
+          _wpLogoLoading[key] = false;
+          if (document.getElementById('wallpaper-panel').classList.contains('open')) {
+            drawWallpaperCanvas();
+          }
+        };
+        img.onerror = () => { _wpLogoLoading[key] = false; };
+        img.src = url;
+      })
+      .catch(() => { _wpLogoLoading[key] = false; });
   });
-  return Promise.resolve(); // 즉시 반환
+  return Promise.resolve();
 }
 
 // 프리셋 선택 — render() 없이 DOM만 업데이트
@@ -2437,22 +2444,10 @@ function wpDrawCalendar(ctx, W, H, userScale, offsetYPct) {
 
 function saveWallpaper() {
   const canvas = document.getElementById('wallpaper-canvas');
-  try {
-    const a = document.createElement('a');
-    a.download = `KIA_${state.yr}년${state.mo}월_배경화면.png`;
-    a.href = canvas.toDataURL('image/png');
-    a.click();
-  } catch(e) {
-    // taint 오류 시 로고 없이 재렌더 후 저장
-    Object.keys(_wpLogoCache).forEach(k => { _wpLogoCache[k] = null; });
-    drawWallpaperCanvas();
-    setTimeout(() => {
-      const a = document.createElement('a');
-      a.download = `KIA_${state.yr}년${state.mo}월_배경화면.png`;
-      a.href = canvas.toDataURL('image/png');
-      a.click();
-    }, 100);
-  }
+  const a = document.createElement('a');
+  a.download = `KIA_${state.yr}년${state.mo}월_배경화면.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
 }
 
 
