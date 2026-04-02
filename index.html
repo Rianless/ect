@@ -1472,9 +1472,10 @@ function renderBaseballRecord(d) {
 }
 
 window._setRecordTab = function(t) {
+  if (state.recordTab === t) return;
   state.recordTab = t;
-  // 탭 전환 시 기존 데이터 지우고 새로 fetch
-  if (t !== 'game') {
+  // 다른 선수 탭으로 전환할 때만 초기화 (같은 탭 데이터는 캐시 유지)
+  if (t !== 'game' && state.playerStats?.tab !== t) {
     state.playerStats = null;
     state.playerStatsError = null;
   }
