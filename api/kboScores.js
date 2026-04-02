@@ -94,11 +94,10 @@ export default async function handler(req, res) {
         const data = await r.json();
         if (!data?.result) continue;
         const res = data.result;
-        // 어떤 URL이 유효한 라인업을 줬는지 로깅
-        const hasData = res.lineUpData || res.awayLineup || res.homeLineup || res.game;
-        console.log('[lineup url]', url.split('/').slice(-1)[0], '→ keys:', Object.keys(res), 'hasData:', !!hasData);
-        if (hasData) {
-          console.log('[lineup game keys]', JSON.stringify(Object.keys(res.game||{})).slice(0,300));
+        // 최상위 키 로깅 (어떤 구조로 오는지 확인)
+        console.log('[lineup url]', url.split('/').slice(-1)[0], '→ keys:', JSON.stringify(Object.keys(res)).slice(0, 300));
+        // hasData 조건 제거 — result가 있으면 무조건 반환, 구조 파싱은 extractLineupPair에서
+        if (res && Object.keys(res).length > 0) {
           return res;
         }
       } catch(e) {}
@@ -274,13 +273,15 @@ export default async function handler(req, res) {
     if (gameId && action === 'lineup') {
       const inn = inning || 1;
 
-      // 모든 경로에서 라인업을 꺼내는 헬퍼
+      // 모든 경로에서 homeLineup/awayLineup을 꺼내는 헬퍼
       function extractLineupPair(raw) {
         if (!raw) return { homeLineup: null, awayLineup: null };
         const td = raw.textRelayData || raw;
-        // 경로 1: 직접 homeLineup/awayLineup
+
+        // 경로 1: 직접 homeLineup/awayLineup (game-polling, text-relay)
         let home = td.homeLineup || raw.homeLineup || null;
         let away = td.awayLineup || raw.awayLineup || null;
+
         // 경로 2: lineUpData 안 (preview/starting-lineup 응답)
         if (!home || !away) {
           const gp = raw.game || {};
@@ -288,35 +289,46 @@ export default async function handler(req, res) {
           if (!home) home = lu.homeLineup || lu.homeTeamLineup || gp.homeLineup || gp.homeTeamLineup || null;
           if (!away) away = lu.awayLineup || lu.awayTeamLineup || gp.awayLineup || gp.awayTeamLineup || null;
         }
-        // 경로 3: homeTeamLineup/awayTeamLineup 직접
+
+        // 경로 3: homeTeamLineup / awayTeamLineup 직접
         if (!home) home = td.homeTeamLineup || raw.homeTeamLineup || null;
         if (!away) away = td.awayTeamLineup || raw.awayTeamLineup || null;
+
+        // 경로 4: batters/pitchers가 side 필드로 구분되는 경우
+        if (!home || !away) {
+          // 네이버가 응답 최상위에 homeTeam/awayTeam 객체 안에 넣는 경우
+          const ht = raw.homeTeam || td.homeTeam || null;
+          const at = raw.awayTeam || td.awayTeam || null;
+          if (!home && ht) home = ht.lineup || ht.lineUp || ht;
+          if (!away && at) away = at.lineup || at.lineUp || at;
+        }
+
+        console.log('[extractLineupPair] home keys:', JSON.stringify(Object.keys(home||{})).slice(0,150),
+                    'away keys:', JSON.stringify(Object.keys(away||{})).slice(0,150));
         return { homeLineup: home, awayLineup: away };
       }
 
-      // 1차: game-polling (LIVE/RESULT 경기에 적합)
-      let detail = await fetchGameDetail(gameId, inn);
-      let { homeLineup, awayLineup } = extractLineupPair(detail);
+      // 1차: game-polling (LIVE/RESULT 경기)
+      let rawDetail = await fetchGameDetail(gameId, inn);
+      let { homeLineup, awayLineup } = extractLineupPair(rawDetail);
 
-      // 2차: 라인업 없으면 preview/starting-lineup/lineup 전용 API 시도
-      //      (BEFORE 경기 or game-polling에 라인업 미포함 경우)
+      // 2차: 라인업 없으면 preview/starting-lineup/lineup 전용 API
       if (!homeLineup && !awayLineup) {
         const lineupRaw = await fetchLineup(gameId, inn);
         const pair = extractLineupPair(lineupRaw);
         homeLineup = pair.homeLineup;
         awayLineup = pair.awayLineup;
-        if (!detail && lineupRaw) detail = lineupRaw;
+        if (!rawDetail && lineupRaw) rawDetail = lineupRaw;
       }
 
       if (!homeLineup && !awayLineup) {
         return res.status(404).json({ error: 'Lineup not found' });
       }
 
-      // currentGameState
-      const td = detail ? (detail.textRelayData || detail) : {};
-      let gs = td.currentGameState || detail?.currentGameState || null;
+      const td = rawDetail ? (rawDetail.textRelayData || rawDetail) : {};
+      let gs = td.currentGameState || rawDetail?.currentGameState || null;
 
-      // pcode → 이름 맵 구성
+      // pcode → 이름 맵
       const pcodeMap = {};
       const allPlayers = [
         ...(homeLineup?.batter || []), ...(homeLineup?.pitcher || []),
@@ -324,7 +336,6 @@ export default async function handler(req, res) {
       ];
       allPlayers.forEach(p => { if (p.pcode) pcodeMap[String(p.pcode)] = p.name || p.playerName || ''; });
 
-      // currentGameState의 pitcher/batter ID를 이름으로 변환
       if (gs) {
         const isNumId = v => v && /^\d+$/.test(String(v));
         const resolveName = (nameField, idField) => {
@@ -339,7 +350,7 @@ export default async function handler(req, res) {
         };
       }
 
-      console.log('[action=lineup] homeB:', homeLineup?.batter?.length, 'awayB:', awayLineup?.batter?.length);
+      console.log('[action=lineup result] homeB:', homeLineup?.batter?.length, 'awayB:', awayLineup?.batter?.length);
 
       return res.status(200).json({
         homeLineup,
