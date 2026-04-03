@@ -2783,74 +2783,42 @@ function renderModal(d) {
           <span style="font-size:13px;font-weight:800;color:${d.text}">투수</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          ${(()=>{
-            // away팀 카드
-            const awayWon  = (g.awayScore??0) > (g.homeScore??0);
-            const awayWinP = awayWon  ? g.winPitcher  : null;
-            const awayLoseP= !awayWon ? g.losePitcher : null;
-            const awayResColor = awayWon?'#00C864':'#E31837';
-            const awayResBg    = awayWon?'rgba(0,200,100,0.08)':'rgba(227,24,55,0.06)';
-            const awayResBdr   = awayWon?'rgba(0,200,100,0.25)':'rgba(227,24,55,0.2)';
-            const awayResLabel = awayWon?'승 승리투수':'패 패전투수';
-            const awayResName  = awayWon ? awayWinP : awayLoseP;
+          ${[lTeam, rTeam].map(team => {
+            const isAway = team === g.away;
+            const starter = isAway ? g.awayStarter : g.homeStarter;
+            const pitcher = isAway ? g.awayPitcher : g.homePitcher;
+            const teamWon = isAway ? (g.awayScore??0) > (g.homeScore??0) : (g.homeScore??0) > (g.awayScore??0);
+            const winP    = teamWon  ? g.winPitcher  : null;
+            const loseP   = !teamWon ? g.losePitcher : null;
+            const resColor = teamWon?'#00C864':'#E31837';
+            const resBg    = teamWon?'rgba(0,200,100,0.08)':'rgba(227,24,55,0.06)';
+            const resBdr   = teamWon?'rgba(0,200,100,0.25)':'rgba(227,24,55,0.2)';
+            const resLabel = teamWon?'승 승리투수':'패 패전투수';
+            const resName  = teamWon ? winP : loseP;
+            const _cgs = g.currentGameState;
+            const _isNum = v => v && /^\d+$/.test(String(v));
+            const _isBottom = (g.inningInfo||'').includes('말');
+            let _curP = pitcher || '';
+            if (isAway) {
+              if (!_curP && _isBottom && _cgs?.pitcherName && !_isNum(_cgs.pitcherName)) _curP = _cgs.pitcherName;
+              if (!_curP) { const _pl = g.lineup?.away?.pitchers||[]; if (_pl.length) _curP = _pl[_pl.length-1]?.name||''; }
+            } else {
+              if (!_curP && !_isBottom && _cgs?.pitcherName && !_isNum(_cgs.pitcherName)) _curP = _cgs.pitcherName;
+              if (!_curP) { const _pl = g.lineup?.home?.pitchers||[]; if (_pl.length) _curP = _pl[_pl.length-1]?.name||''; }
+            }
             return `<div style="background:${d.bg};border:1.5px solid ${d.bgB};border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px">
-              <div style="display:flex;align-items:center;gap:6px">${logo(g.away,20)}<span style="font-size:12px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.away}</span></div>
-              ${isFinal&&awayResName?`<div style="background:${awayResBg};border:1px solid ${awayResBdr};border-radius:8px;padding:8px">
-                <div style="font-size:9px;font-weight:700;color:${awayResColor};margin-bottom:3px">${awayResLabel}</div>
-                <div style="font-size:15px;font-weight:900;color:${d.text}">${awayResName}</div>
+              <div style="display:flex;align-items:center;gap:6px">${logo(team,20)}<span style="font-size:12px;font-weight:800;color:${team==='KIA'?'#ff6b6b':d.text}">${team}</span></div>
+              ${isFinal&&resName?`<div style="background:${resBg};border:1px solid ${resBdr};border-radius:8px;padding:8px">
+                <div style="font-size:9px;font-weight:700;color:${resColor};margin-bottom:3px">${resLabel}</div>
+                <div style="font-size:15px;font-weight:900;color:${d.text}">${resName}</div>
               </div>`:''}
-              ${(()=>{
-                // away 현재/최종 투수: awayPitcher 없으면 cgs와 lineup에서 보완
-                const _cgs_a = g.currentGameState;
-                const _isNum_a = v => v && /^\d+$/.test(String(v));
-                // 말이면 away가 수비 → cgs.pitcherName으로 보완 (초이면 cgs는 상대 팀 투수이므로 사용 안 함)
-                const _isBottom_a = (g.inningInfo||'').includes('말');
-                let _awayP = g.awayPitcher || '';
-                if (!_awayP && _isBottom_a && _cgs_a?.pitcherName && !_isNum_a(_cgs_a.pitcherName)) _awayP = _cgs_a.pitcherName;
-                // lineup 폴백: 해당 팀의 마지막 등판 투수 (이닝 구분 없이 항상 적용)
-                if (!_awayP) { const _apl = g.lineup?.away?.pitchers||[]; if (_apl.length) _awayP = _apl[_apl.length-1]?.name||''; }
-                return `<div style="border-top:1px solid ${d.bgB};padding-top:8px">
-                  <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
-                  <div style="font-size:13px;font-weight:800;color:${g.away==='KIA'?'#ff6b6b':d.text}">${g.awayStarter||'미정'}</div>
-                  ${(!isSch&&_awayP&&_awayP!==g.awayStarter)?`<div style="font-size:10px;color:${d.sub};margin-top:4px">${isLive?'현재':'최종'} <span style="font-weight:700;color:${(T[g.away]||{}).color||'#888'}">${_awayP}</span></div>`:''}
-                </div>`;
-              })()}
+              <div style="border-top:1px solid ${d.bgB};padding-top:8px">
+                <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
+                <div style="font-size:13px;font-weight:800;color:${team==='KIA'?'#ff6b6b':d.text}">${starter||'미정'}</div>
+                ${(!isSch&&_curP&&_curP!==starter)?`<div style="font-size:10px;color:${d.sub};margin-top:4px">${isLive?'현재':'최종'} <span style="font-weight:700;color:${(T[team]||{}).color||'#888'}">${_curP}</span></div>`:''}
+              </div>
             </div>`;
-          })()}
-          ${(()=>{
-            // home팀 카드
-            const homeWon  = (g.homeScore??0) > (g.awayScore??0);
-            const homeWinP = homeWon  ? g.winPitcher  : null;
-            const homeLoseP= !homeWon ? g.losePitcher : null;
-            const homeResColor = homeWon?'#00C864':'#E31837';
-            const homeResBg    = homeWon?'rgba(0,200,100,0.08)':'rgba(227,24,55,0.06)';
-            const homeResBdr   = homeWon?'rgba(0,200,100,0.25)':'rgba(227,24,55,0.2)';
-            const homeResLabel = homeWon?'승 승리투수':'패 패전투수';
-            const homeResName  = homeWon ? homeWinP : homeLoseP;
-            return `<div style="background:${d.bg};border:1.5px solid ${d.bgB};border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px">
-              <div style="display:flex;align-items:center;gap:6px">${logo(g.home,20)}<span style="font-size:12px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.home}</span></div>
-              ${isFinal&&homeResName?`<div style="background:${homeResBg};border:1px solid ${homeResBdr};border-radius:8px;padding:8px">
-                <div style="font-size:9px;font-weight:700;color:${homeResColor};margin-bottom:3px">${homeResLabel}</div>
-                <div style="font-size:15px;font-weight:900;color:${d.text}">${homeResName}</div>
-              </div>`:''}
-              ${(()=>{
-                // home 현재/최종 투수: homePitcher 없으면 cgs와 lineup에서 보완
-                const _cgs_h = g.currentGameState;
-                const _isNum_h = v => v && /^\d+$/.test(String(v));
-                // 초이면 home가 수비 → cgs.pitcherName으로 보완 (말이면 cgs는 상대 팀 투수이므로 사용 안 함)
-                const _isTop_h = !(g.inningInfo||'').includes('말');
-                let _homeP = g.homePitcher || '';
-                if (!_homeP && _isTop_h && _cgs_h?.pitcherName && !_isNum_h(_cgs_h.pitcherName)) _homeP = _cgs_h.pitcherName;
-                // lineup 폴백: 해당 팀의 마지막 등판 투수 (이닝 구분 없이 항상 적용)
-                if (!_homeP) { const _hpl = g.lineup?.home?.pitchers||[]; if (_hpl.length) _homeP = _hpl[_hpl.length-1]?.name||''; }
-                return `<div style="border-top:1px solid ${d.bgB};padding-top:8px">
-                  <div style="font-size:9px;color:${d.sub};margin-bottom:3px">선발</div>
-                  <div style="font-size:13px;font-weight:800;color:${g.home==='KIA'?'#ff6b6b':d.text}">${g.homeStarter||'미정'}</div>
-                  ${(!isSch&&_homeP&&_homeP!==g.homeStarter)?`<div style="font-size:10px;color:${d.sub};margin-top:4px">${isLive?'현재':'최종'} <span style="font-weight:700;color:${(T[g.home]||{}).color||'#888'}">${_homeP}</span></div>`:''}
-                </div>`;
-              })()}
-            </div>`;
-          })()}
+          }).join('')}
         </div>
       </div>`:''}
       <div style="margin-bottom:18px">
@@ -4952,5 +4920,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
-
