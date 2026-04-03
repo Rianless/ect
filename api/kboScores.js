@@ -289,211 +289,10 @@ export default async function handler(req, res) {
     };
   }
 
-  function normalizeTeamName(name) {
-    return String(name || '').trim().toUpperCase();
-  }
-
-  function shiftDate(dateStr, diffDays) {
-    const dt = new Date(`${dateStr}T00:00:00+09:00`);
-    dt.setDate(dt.getDate() + diffDays);
-    const y = dt.getFullYear();
-    const m = String(dt.getMonth() + 1).padStart(2, '0');
-    const d = String(dt.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  function pickWidgetGame(games, team, preferredDate) {
-    if (!Array.isArray(games) || !games.length) return null;
-    const normalizedTeam = normalizeTeamName(team);
-    const teamGames = normalizedTeam
-      ? games.filter(g =>
-          normalizeTeamName(g.away) === normalizedTeam ||
-          normalizeTeamName(g.home) === normalizedTeam
-        )
-      : games;
-
-    if (!teamGames.length) return games[0] || null;
-
-    const todayGames = preferredDate
-      ? teamGames.filter(g => g.date === preferredDate)
-      : teamGames;
-    const yesterdayGames = preferredDate
-      ? teamGames.filter(g => g.date === shiftDate(preferredDate, -1))
-      : [];
-    const tomorrowGames = preferredDate
-      ? teamGames.filter(g => g.date === shiftDate(preferredDate, 1))
-      : [];
-
-    const liveGame = teamGames.find(g => g.status === 'LIVE');
-    if (liveGame) return liveGame;
-
-    const todayFinal = [...todayGames].reverse().find(g => g.status === 'FINAL');
-    if (todayFinal) return todayFinal;
-
-    const todayScheduled = todayGames.find(g => g.status === 'SCHEDULED');
-    if (todayScheduled) return todayScheduled;
-
-    const yesterdayFinal = [...yesterdayGames].reverse().find(g => g.status === 'FINAL');
-    if (yesterdayFinal) return yesterdayFinal;
-
-    const tomorrowScheduled = tomorrowGames.find(g => g.status === 'SCHEDULED');
-    if (tomorrowScheduled) return tomorrowScheduled;
-
-    return teamGames[0];
-  }
-
-  function buildWidgetPayload(game, team, date) {
-    const normalizedTeam = normalizeTeamName(team);
-    if (!game) {
-      return {
-        ok: true,
-        date,
-        team: normalizedTeam || null,
-        hasGame: false,
-        message: normalizedTeam ? `${normalizedTeam} game not found` : 'Game not found',
-      };
-    }
-
-    const isHomeTeam = normalizedTeam
-      ? normalizeTeamName(game.home) === normalizedTeam
-      : false;
-    const isAwayTeam = normalizedTeam
-      ? normalizeTeamName(game.away) === normalizedTeam
-      : false;
-    const isTeamGame = isHomeTeam || isAwayTeam;
-    const teamScore = isTeamGame
-      ? (isHomeTeam ? game.homeScore : game.awayScore)
-      : null;
-    const opponentScore = isTeamGame
-      ? (isHomeTeam ? game.awayScore : game.homeScore)
-      : null;
-    const opponent = isTeamGame
-      ? (isHomeTeam ? game.away : game.home)
-      : null;
-    const displayStatus = game.status === 'LIVE'
-      ? (game.inningInfo || 'LIVE')
-      : game.status === 'FINAL'
-        ? 'FINAL'
-        : (game.time || 'SCHEDULED');
-
-    return {
-      ok: true,
-      date,
-      hasGame: true,
-      team: normalizedTeam || null,
-      gameId: game.gameId,
-      status: game.status,
-      statusLabel: displayStatus,
-      inningInfo: game.inningInfo || null,
-      time: game.time || null,
-      matchup: `${game.away} vs ${game.home}`,
-      stadium: game.stad || null,
-      gameDate: game.date || date,
-      isTeamGame,
-      isHomeTeam,
-      opponent,
-      teamScore,
-      opponentScore,
-      scores: {
-        away: game.awayScore,
-        home: game.homeScore,
-      },
-      teams: {
-        away: game.away,
-        home: game.home,
-      },
-      pitchers: {
-        awayStarter: game.awayStarter || null,
-        homeStarter: game.homeStarter || null,
-        win: game.winPitcher || null,
-        lose: game.losePitcher || null,
-      },
-      currentGameState: game.currentGameState || null,
-      updatedAt: new Date().toISOString(),
-    };
-  }
-
-  function getFullTeamName(shortName) {
-    return TEAM_FULL[shortName] || shortName || '';
-  }
-
-  function inferGameTime(dateStr) {
-    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const day = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
-    if (day === 6) return '17:00';
-    if (day === 0) return '14:00';
-    return '18:30';
-  }
-
-  function getDisplayStadium(payload) {
-    if (payload.stadium && payload.stadium !== payload.teams?.home) {
-      if (payload.stadium === '광주' && payload.teams?.home === 'KIA') return '광주 기아챔피언스필드';
-      return payload.stadium;
-    }
-    return HOME_STADIUM[payload.teams?.home] || payload.stadium || '';
-  }
-
-  function formatKoreanDate(dateStr) {
-    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const day = DAY_KO[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()];
-    return `${m}/${d}(${day})`;
-  }
-
-  function buildWidgetLine(payload, line) {
-    if (!payload?.hasGame) return payload?.message || 'No game';
-
-    if (line === 'widget_line1') {
-      if (payload.isTeamGame && payload.team && payload.opponent) {
-        return `${payload.team} VS ${payload.opponent}`;
-      }
-      return payload.matchup || 'KBO';
-    }
-
-    if (line === 'widget_line2') {
-      if (payload.teamScore != null && payload.opponentScore != null) {
-        return `${payload.teamScore} : ${payload.opponentScore}`;
-      }
-      return '0 : 0';
-    }
-
-    if (line === 'widget_line3') {
-      if (payload.status === 'LIVE') return payload.inningInfo || payload.statusLabel || 'LIVE';
-      if (payload.status === 'FINAL') return 'FINAL';
-      if (payload.time) return `${payload.time} 경기 전`;
-      return '경기 전';
-    }
-
-    if (line === 'widget_top') {
-      if (payload.status === 'LIVE') return payload.inningInfo || 'LIVE';
-      if (payload.status === 'FINAL') return '경기 종료';
-      if (payload.time || payload.gameDate) return `${payload.time || inferGameTime(payload.gameDate)} 오늘 경기 예정`;
-      return '오늘 경기 예정';
-    }
-
-    if (line === 'widget_main') {
-      if (payload.status === 'LIVE' || payload.status === 'FINAL') {
-        return `${payload.teamScore ?? 0} : ${payload.opponentScore ?? 0}`;
-      }
-      return `VS ${getFullTeamName(payload.opponent)}`;
-    }
-
-    if (line === 'widget_bottom') {
-      const dateLabel = formatKoreanDate(payload.gameDate);
-      const placeLabel = getDisplayStadium(payload);
-      const homeAwayLabel = payload.isHomeTeam ? '홈' : '원정';
-      return [dateLabel, placeLabel, homeAwayLabel].filter(Boolean).join(' · ');
-    }
-
-    return '';
-  }
-
   try {
     const gameId = req.query.gameId;
     const inning = req.query.inning ? parseInt(req.query.inning) : null;
     const action = req.query.action || '';
-    const team = req.query.team || 'KIA';
 
     if (gameId && action === 'lineup') {
       const inn = inning || 1;
@@ -588,19 +387,7 @@ export default async function handler(req, res) {
       return res.status(200).json(convertGame(g, detail));
     }
 
-    const widgetAction = action === 'widget' || action === 'widget_line1' || action === 'widget_line2' || action === 'widget_line3';
-    const targetDates = widgetAction
-      ? [shiftDate(todayDash, -1), todayDash, shiftDate(todayDash, 1)]
-      : [todayDash];
-
-    const scheduleResults = await Promise.all(targetDates.map(async date => {
-      try {
-        return await fetchSchedule(date);
-      } catch(e) {
-        return [];
-      }
-    }));
-    const rawGames = scheduleResults.flat();
+    const rawGames = await fetchSchedule(todayDash).catch(() => []);
 
     // LIVE/RESULT 경기는 game-polling으로 이닝 스코어+currentGameState 확보
     // BEFORE 경기는 lineup으로 선발 정보만 확보
@@ -618,22 +405,6 @@ export default async function handler(req, res) {
       } catch(e) {}
     }));
     const allGames = rawGames.map(g => convertGame(g, detailMap[g.gameId] || null));
-
-    if (action === 'widget') {
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      const selectedGame = pickWidgetGame(allGames, team, todayDash);
-      return res.status(200).json(buildWidgetPayload(selectedGame, team, todayDash));
-    }
-
-    if (
-      action === 'widget_line1' || action === 'widget_line2' || action === 'widget_line3' ||
-      action === 'widget_top' || action === 'widget_main' || action === 'widget_bottom'
-    ) {
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      const selectedGame = pickWidgetGame(allGames, team, todayDash);
-      const payload = buildWidgetPayload(selectedGame, team, todayDash);
-      return res.status(200).send(buildWidgetLine(payload, action));
-    }
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.status(200).json({ games: allGames, date: todayStr });
