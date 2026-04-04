@@ -2867,7 +2867,7 @@ function renderModal(d) {
           <span style="font-size:13px;font-weight:800;color:${d.text}">투수</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          ${[lTeam, rTeam].map(team => {
+          ${[hTeam, aTeam].map(team => {
             const isAway = team === g.away;
             const starter = isAway ? g.awayStarter : g.homeStarter;
             const pitcher = isAway ? g.awayPitcher : g.homePitcher;
