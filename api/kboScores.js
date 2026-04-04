@@ -251,7 +251,7 @@ export default async function handler(req, res) {
     return {
       gameId: String(g.gameId || ""),
       date: g.gameDate || '',
-      time: g.gameTime || g.startTime || g.schedule?.startTime || null,
+      time: g.gameDateTime?.split('T')[1]?.slice(0,5) || g.gameTime || g.startTime || g.schedule?.startTime || null,
       away, home,
       status,
       awayScore: g.awayTeamScore!=null ? Number(g.awayTeamScore) : null,
