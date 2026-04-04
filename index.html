@@ -1606,21 +1606,30 @@ function _renderGameRecord(d) {
     // ── 티켓 하단: 팀 로고 + 스코어 (사진처럼 크게) ──
     html += '<div style="padding:22px 20px 20px">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between">';
-    // AWAY팀
+    // KIA 항상 왼쪽, 상대 오른쪽
+    const leftTeam  = isHome ? g.home  : g.away;
+    const rightTeam = isHome ? g.away  : g.home;
+    const leftShort  = isHome ? homeShort : awayShort;
+    const rightShort = isHome ? awayShort : homeShort;
+    const leftScore  = isHome ? (g.homeScore??0) : (g.awayScore??0);
+    const rightScore = isHome ? (g.awayScore??0) : (g.homeScore??0);
+    const leftLabel  = isHome ? 'HOME' : 'AWAY';
+    const rightLabel = isHome ? 'AWAY' : 'HOME';
+    // KIA팀
     html += '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">';
-    html += logo(g.away, 68);
-    html += '<div style="font-size:14px;font-weight:800;color:'+(g.away==='KIA'?'#E31837':d.text)+'">'+awayShort+'</div>';
-    html += '<div style="font-size:11px;color:'+d.sub+';letter-spacing:0.05em">AWAY</div>';
+    html += logo(leftTeam, 68);
+    html += '<div style="font-size:14px;font-weight:800;color:#E31837">'+leftShort+'</div>';
+    html += '<div style="font-size:11px;color:'+d.sub+';letter-spacing:0.05em">'+leftLabel+'</div>';
     html += '</div>';
     // 스코어
     html += '<div style="text-align:center;padding:0 8px">';
-    html += '<div style="font-size:36px;font-weight:900;color:'+d.text+';letter-spacing:-1px">'+(g.awayScore??0)+'<span style="font-size:22px;color:'+d.muted+';margin:0 6px">:</span>'+(g.homeScore??0)+'</div>';
+    html += '<div style="font-size:36px;font-weight:900;color:'+d.text+';letter-spacing:-1px">'+leftScore+'<span style="font-size:22px;color:'+d.muted+';margin:0 6px">:</span>'+rightScore+'</div>';
     html += '</div>';
-    // HOME팀
+    // 상대팀
     html += '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:1">';
-    html += logo(g.home, 68);
-    html += '<div style="font-size:14px;font-weight:800;color:'+(g.home==='KIA'?'#E31837':d.text)+'">'+homeShort+'</div>';
-    html += '<div style="font-size:11px;color:'+d.sub+';letter-spacing:0.05em">HOME</div>';
+    html += logo(rightTeam, 68);
+    html += '<div style="font-size:14px;font-weight:800;color:'+d.text+'">'+rightShort+'</div>';
+    html += '<div style="font-size:11px;color:'+d.sub+';letter-spacing:0.05em">'+rightLabel+'</div>';
     html += '</div>';
     html += '</div>';
     html += '</div>'; // 하단 스코어 끝
