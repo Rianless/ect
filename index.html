@@ -801,6 +801,67 @@ let state = {
 let _relayGameId = null, _relayAway = '', _relayHome = '', _relayInn = 1, _relayData = null, _relayInterval = null;
 
 // 용여찾기 로드
+
+// ── 서버 동기화 ──
+const _API_RECORDS = '/api/records';
+let _serverSyncDone = false;
+
+async function serverGetAll() {
+  try {
+    const r = await fetch(_API_RECORDS + '?action=getAll');
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+async function serverSet(key, value) {
+  try {
+    await fetch(_API_RECORDS + '?action=set&key=' + encodeURIComponent(key), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(value)
+    });
+  } catch(e) {}
+}
+
+async function serverDel(key) {
+  try {
+    await fetch(_API_RECORDS + '?action=del&key=' + encodeURIComponent(key), {
+      method: 'DELETE'
+    });
+  } catch(e) {}
+}
+
+// 앱 시작 시 서버 → localStorage 동기화
+async function initServerSync() {
+  const data = await serverGetAll();
+  if (!data) return;
+  Object.entries(data).forEach(([key, value]) => {
+    // 사진(base64)은 서버에서 안 내려오지만 혹시 모르니 스킵
+    if (key === 'kbo_game_cache') return;
+    const existing = localStorage.getItem(key);
+    // 서버 데이터로 덮어쓰기 (서버가 진실의 원천)
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+  });
+  _serverSyncDone = true;
+}
+
+// localStorage + 서버 동시 저장
+function syncSet(key, value) {
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  localStorage.setItem(key, str);
+  serverSet(key, value);
+}
+
+// localStorage + 서버 동시 삭제
+function syncDel(key) {
+  localStorage.removeItem(key);
+  serverDel(key);
+}
+
+// 서버 동기화 시작 (render 전에 실행)
+const _initSync = initServerSync();
+
 let FAVS = JSON.parse(localStorage.getItem('kbo_favs')||'[]');
 function favKey(g) { return `${g.date}_${g.away}_${g.home}`; }
 function isFav(g) { return FAVS.includes(favKey(g)); }
@@ -1654,7 +1715,13 @@ function _recGetMemo(date, away, home) {
   try { const d = JSON.parse(localStorage.getItem(key)||'{}'); return typeof d==='string'?{text:d}:d; } catch(e) { return {}; }
 }
 function _recSaveMemo(date, away, home, data) {
-  localStorage.setItem('m_'+date+'_'+away+'_'+home, JSON.stringify(data));
+  const key = 'm_'+date+'_'+away+'_'+home;
+  const toSave = {...data};
+  delete toSave.photos; // 사진은 localStorage에만
+  syncSet(key, toSave);
+  // 사진은 localStorage에만 별도 저장
+  const localData = {...data};
+  localStorage.setItem(key, JSON.stringify(localData));
 }
 
 window.recSetWatch = function(date, away, home, v) {
@@ -1760,7 +1827,7 @@ function getTodos() {
   try { return JSON.parse(localStorage.getItem('kbo_todos')||'[]'); } catch(e) { return []; }
 }
 function saveTodos(list) {
-  localStorage.setItem('kbo_todos', JSON.stringify(list));
+  syncSet('kbo_todos', list);
 }
 
 function renderTodoMemo(d) {
@@ -4842,8 +4909,14 @@ function _compressAll(files, cb) {
 
 
 
-render();
-_initFetch.then(() => render()).catch(() => {});
+// 서버 동기화 완료 후 render
+_initSync.then(() => {
+  render();
+  _initFetch.then(() => render()).catch(() => {});
+}).catch(() => {
+  render();
+  _initFetch.then(() => render()).catch(() => {});
+});
 </script>
 
 <!-- 배경화면 메이커 패널 -->
