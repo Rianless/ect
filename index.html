@@ -1238,7 +1238,7 @@ function renderCalSplit(d) {
       rightContent = `<div style="font-size:22px;font-weight:900;color:#fff;text-align:right">${kScore2}<span style="font-size:14px;opacity:0.7;margin:0 4px">:</span>${oScore2}</div>`;
     } else {
       // 예정 경기
-      subLabel = isToday2 ? `${bannerGame.time} 오늘 경기 예정` : `${bannerGame.time} 다음 경기 예정`;
+      subLabel = isToday2 ? `${dateDisp} ${bannerGame.time} 오늘 경기 예정` : `${dateDisp} ${bannerGame.time} 다음 경기 예정`;
       const diffTxt = !isToday2 && diffDays>0 ? `<span style="font-size:15px;font-weight:900;color:rgba(255,255,255,0.85);margin-left:6px">${diffDays}일 후</span>` : '';
       mainContent = `<div style="font-size:17px;font-weight:900;color:#fff">vs ${T[opp2]?.name||opp2}${diffTxt}</div>`;
       rightContent = '';
@@ -1249,7 +1249,7 @@ function renderCalSplit(d) {
       <div style="flex:1;min-width:0">
         <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700;margin-bottom:3px">${subLabel}</div>
         ${mainContent}
-        <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px">${dateDisp}${stadDisp} · ${isHome2?'홈':'원정'}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px">${stadDisp ? stadDisp.slice(3) : ''} · ${isHome2?'홈':'원정'}</div>
       </div>
       ${rightContent ? `<div>${rightContent}</div>` : ''}
       ${logo(opp2,44)}
