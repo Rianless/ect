@@ -2734,7 +2734,8 @@ function renderModal(d) {
       { key:'away', team:g.away, meta:aw },
       { key:'home', team:g.home, meta:hw },
     ];
-    if ((g.away === 'NC' && g.home === 'KIA') || (g.away === 'KIA' && g.home === 'NC')) {
+    // KIA가 홈 또는 어웨이에 있으면 KIA를 항상 첫 번째로
+    if (g.home === 'KIA' || g.away === 'KIA') {
       return base.sort((a,b)=>(a.team === 'KIA' ? -1 : 1));
     }
     return base;
@@ -5028,3 +5029,4 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
