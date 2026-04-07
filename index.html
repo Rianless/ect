@@ -3536,9 +3536,10 @@ function openModal(idx,date) {
   const dayGs=SCH.filter(g=>g.date===date);
   const sorted=[...dayGs.filter(g=>g.away==='KIA'||g.home==='KIA'),...dayGs.filter(g=>g.away!=='KIA'&&g.home!=='KIA')];
   state.modalGame=sorted[idx];
-  state.modalLt = ((state.modalGame.away === 'NC' && state.modalGame.home === 'KIA') || (state.modalGame.away === 'KIA' && state.modalGame.home === 'NC'))
-    ? (state.modalGame.away === 'KIA' ? 'away' : 'home')
-    : 'away';
+  // KIA가 있는 경기면 항상 KIA 탭을 기본 선택
+  if (state.modalGame.away === 'KIA') state.modalLt = 'away';
+  else if (state.modalGame.home === 'KIA') state.modalLt = 'home';
+  else state.modalLt = 'away';
   const overlay=document.getElementById('modal-overlay');
   const box=document.getElementById('modal-box');
   box.classList.remove('closing'); overlay.classList.add('open');
