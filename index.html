@@ -1150,6 +1150,15 @@ function _fillCardWeathers(d) {
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.gap = '3px';
+      // 달력 셀 시간 텍스트 → 우취 표시
+      if(w.isRain && (g.away==='KIA'||g.home==='KIA') && (!g.status||g.status==='SCHEDULED'||g.status==='BEFORE')) {
+        const timeEl = document.getElementById('cal-time-' + g.date);
+        if(timeEl) {
+          timeEl.textContent = '우취';
+          timeEl.style.color = '#2979FF';
+          timeEl.style.fontWeight = '700';
+        }
+      }
     });
   });
 }
@@ -1192,13 +1201,28 @@ function renderCalSplit(d) {
     const statusBadge = kg&&kg.status==='LIVE'?'<div style="font-size:6px;background:#E31837;color:#fff;border-radius:2px;padding:0 2px;font-weight:700;line-height:1.4">LIVE</div>':'';
     // 날짜 스타일: 홈경기=빨간동그라미, 원정=기본, 선택=배경만
     const dayExtraStyle = isKiaGame&&isKiaHome ? 'background:rgba(227,24,55,0.15);border-color:#E31837;' : '';
-    const kiaLost = kg&&kg.status==='FINAL'&&(()=>{const ks=isHome?kg.homeScore:kg.awayScore,os=isHome?kg.awayScore:kg.homeScore;return ks!=null&&os!=null&&ks<os;})();
-    const logoGrayStyle = kiaLost?'filter:grayscale(1);opacity:0.72;':'';
+    const kiaScore = kg?(isHome?kg.homeScore:kg.awayScore):null;
+    const oppScore = kg?(isHome?kg.awayScore:kg.homeScore):null;
+    const kiaLost = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&kiaScore<oppScore;
+    const kiaDraw = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&kiaScore===oppScore;
+    // 로고 렌더: 패배=흑백, 무승부=절반 흑백(SVG clip), 승리=그대로
+    function calLogoHtml(teamKey, size) {
+      const t = T[teamKey]; if(!t) return '';
+      const uid = 'clip_'+ds.replace(/-/g,'')+'_'+teamKey;
+      if(kiaLost) {
+        return `<img src="${t.img}" style="width:${size}px;height:${size}px;object-fit:contain;filter:grayscale(1);opacity:0.72" onerror="this.style.display='none'">`;
+      } else if(kiaDraw) {
+        return `<svg width="${size}" height="${size}" style="overflow:visible;display:block"><defs><clipPath id="${uid}L"><rect x="0" y="0" width="${size/2}" height="${size}"/></clipPath><clipPath id="${uid}R"><rect x="${size/2}" y="0" width="${size/2}" height="${size}"/></clipPath></defs><image href="${t.img}" width="${size}" height="${size}" clip-path="url(#${uid}L)" style="filter:grayscale(1);opacity:0.72"/><image href="${t.img}" width="${size}" height="${size}" clip-path="url(#${uid}R)"/></svg>`;
+      } else {
+        return `<img src="${t.img}" style="width:${size}px;height:${size}px;object-fit:contain" onerror="this.style.display='none'">`;
+      }
+    }
+    const timeLabel = kg?`<div id="cal-time-${ds}" style="font-size:7px;color:${d.sub};font-weight:600;line-height:1">${kg.time}</div>`:'';
     cells+=`<div class="cal-cell${isSel?' sel':''}${isPast?' past':''}${isCurrentWeek?' current-week':''}" onclick="selDate('${ds}')">
       <div class="cal-day${isToday?' today':''}${dow===5?' sat':dow===6?' sun':''}" style="color:${dayColor};${dayExtraStyle}">${i}</div>
       ${isKiaGame?`<div style="display:flex;flex-direction:column;align-items:center;gap:1px">
-        <div style="${logoGrayStyle}">${logo(oppKey,22)}</div>
-        ${statusBadge||`<div style="font-size:7px;color:${d.sub};font-weight:600;line-height:1">${kg.time}</div>`}
+        <div>${calLogoHtml(oppKey,22)}</div>
+        ${statusBadge||timeLabel}
       </div>`:''}
     </div>`;
   }
@@ -5030,4 +5054,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
