@@ -1161,6 +1161,27 @@ function _fillCardWeathers(d) {
       }
     });
   });
+  // 달력에 표시된 모든 KIA 경기 날짜의 우취도 업데이트 (선택된 날짜 외)
+  const {yr, mo} = state;
+  const kiaCalGames = SCH.filter(g => {
+    if(g.away!=='KIA'&&g.home!=='KIA') return false;
+    if(g.date===sel) return false;
+    if(g.status==='FINAL') return false;
+    const [gy,gm]=g.date.split('-').map(Number);
+    return gy===yr&&gm===mo;
+  });
+  kiaCalGames.forEach(g => {
+    if(!g.stad) return;
+    fetchWeather(g.stad).then(w => {
+      if(!w||!w.isRain) return;
+      const timeEl = document.getElementById('cal-time-' + g.date);
+      if(timeEl) {
+        timeEl.textContent = '우취';
+        timeEl.style.color = '#2979FF';
+        timeEl.style.fontWeight = '700';
+      }
+    });
+  });
 }
 
 function renderCalSplit(d) {
@@ -1203,8 +1224,8 @@ function renderCalSplit(d) {
     const dayExtraStyle = isKiaGame&&isKiaHome ? 'background:rgba(227,24,55,0.15);border-color:#E31837;' : '';
     const kiaScore = kg?(isHome?kg.homeScore:kg.awayScore):null;
     const oppScore = kg?(isHome?kg.awayScore:kg.homeScore):null;
-    const kiaLost = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&kiaScore<oppScore;
-    const kiaDraw = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&kiaScore===oppScore;
+    const kiaLost = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&Number(kiaScore)<Number(oppScore);
+    const kiaDraw = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&Number(kiaScore)===Number(oppScore);
     // 로고 렌더: 패배=흑백, 무승부=절반 흑백(SVG clip), 승리=그대로
     function calLogoHtml(teamKey, size) {
       const t = T[teamKey]; if(!t) return '';
