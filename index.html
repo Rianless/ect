@@ -1265,10 +1265,18 @@ function renderCalSplit(d) {
         return `<img src="${t.img}" style="width:${size}px;height:${size}px;object-fit:contain" onerror="this.style.display='none'">`;
       }
     }
+    const kiaFinal = kg && kg.status==='FINAL' && kiaScore!=null && oppScore!=null;
+    const kiaWon   = kiaFinal && kiaScore > oppScore;
     const timeLabel = kg
       ? kg.status==='CANCELED'
         ? `<div id="cal-time-${ds}" style="font-size:7px;color:#2979FF;font-weight:700;line-height:1">우취</div>`
-        : `<div id="cal-time-${ds}" style="font-size:7px;color:${d.sub};font-weight:600;line-height:1">${kg.time}</div>`
+        : kiaFinal
+          ? kiaWon
+            ? `<div id="cal-time-${ds}" style="font-size:7px;color:#E31837;font-weight:800;line-height:1">승리</div>`
+            : kiaDraw
+              ? `<div id="cal-time-${ds}" style="font-size:7px;color:#FF9500;font-weight:800;line-height:1">무승부</div>`
+              : `<div id="cal-time-${ds}" style="font-size:7px;color:#3B9EF5;font-weight:800;line-height:1">패배</div>`
+          : `<div id="cal-time-${ds}" style="font-size:7px;color:${d.sub};font-weight:600;line-height:1">${kg.time}</div>`
       : '';
     cells+=`<div class="cal-cell${isSel?' sel':''}${isPast?' past':''}${isCurrentWeek?' current-week':''}" onclick="selDate('${ds}')">
       <div class="cal-day${isToday?' today':''}${dow===5?' sat':dow===6?' sun':''}" style="color:${dayColor};${dayExtraStyle}">${i}</div>
