@@ -1134,9 +1134,11 @@ function renderContent(d) {
 }
 
 function _fillCardWeathers(d) {
-  const {sel} = state;
+  const {sel, yr, mo} = state;
   const selGs = SCH.filter(g => g.date === sel);
   selGs.forEach(g => {
+    // 우천취소 경기는 날씨 fetch 불필요 (이미 카드/달력에 우취 표시됨)
+    if (g.status === 'CANCELED') return;
     if (!g.stad) return;
     const el = document.getElementById('card-weather-' + g.gameId);
     if (!el) return;
@@ -1150,7 +1152,7 @@ function _fillCardWeathers(d) {
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.gap = '3px';
-      // 달력 셀 시간 텍스트 → 우취 표시
+      // 날씨 기반 우취 (미래 경기 예보)
       if(w.isRain && (g.away==='KIA'||g.home==='KIA') && (!g.status||g.status==='SCHEDULED'||g.status==='BEFORE')) {
         const timeEl = document.getElementById('cal-time-' + g.date);
         if(timeEl) {
@@ -1162,16 +1164,16 @@ function _fillCardWeathers(d) {
     });
   });
   // 달력에 표시된 모든 KIA 경기 날짜의 우취도 업데이트 (선택된 날짜 외)
-  const {yr, mo} = state;
   const kiaCalGames = SCH.filter(g => {
     if(g.away!=='KIA'&&g.home!=='KIA') return false;
     if(g.date===sel) return false;
-    if(g.status==='FINAL') return false;
     const [gy,gm]=g.date.split('-').map(Number);
     return gy===yr&&gm===mo;
   });
   kiaCalGames.forEach(g => {
-    if(!g.stad) return;
+    // 이미 CANCELED면 달력 셀이 렌더 시점에 우취로 표시됨
+    if(g.status==='CANCELED') return;
+    if(!g.stad||g.status==='FINAL') return;
     fetchWeather(g.stad).then(w => {
       if(!w||!w.isRain) return;
       const timeEl = document.getElementById('cal-time-' + g.date);
@@ -1224,8 +1226,8 @@ function renderCalSplit(d) {
     const dayExtraStyle = isKiaGame&&isKiaHome ? 'background:rgba(227,24,55,0.15);border-color:#E31837;' : '';
     const kiaScore = kg?(isHome?kg.homeScore:kg.awayScore):null;
     const oppScore = kg?(isHome?kg.awayScore:kg.homeScore):null;
-    const kiaLost = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&Number(kiaScore)<Number(oppScore);
-    const kiaDraw = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&Number(kiaScore)===Number(oppScore);
+    const kiaLost = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&kiaScore<oppScore;
+    const kiaDraw = kg&&kg.status==='FINAL'&&kiaScore!=null&&oppScore!=null&&kiaScore===oppScore;
     // 로고 렌더: 패배=흑백, 무승부=절반 흑백(SVG clip), 승리=그대로
     function calLogoHtml(teamKey, size) {
       const t = T[teamKey]; if(!t) return '';
@@ -1238,7 +1240,11 @@ function renderCalSplit(d) {
         return `<img src="${t.img}" style="width:${size}px;height:${size}px;object-fit:contain" onerror="this.style.display='none'">`;
       }
     }
-    const timeLabel = kg?`<div id="cal-time-${ds}" style="font-size:7px;color:${d.sub};font-weight:600;line-height:1">${kg.time}</div>`:'';
+    const timeLabel = kg
+      ? kg.status==='CANCELED'
+        ? `<div id="cal-time-${ds}" style="font-size:7px;color:#2979FF;font-weight:700;line-height:1">우취</div>`
+        : `<div id="cal-time-${ds}" style="font-size:7px;color:${d.sub};font-weight:600;line-height:1">${kg.time}</div>`
+      : '';
     cells+=`<div class="cal-cell${isSel?' sel':''}${isPast?' past':''}${isCurrentWeek?' current-week':''}" onclick="selDate('${ds}')">
       <div class="cal-day${isToday?' today':''}${dow===5?' sat':dow===6?' sun':''}" style="color:${dayColor};${dayExtraStyle}">${i}</div>
       ${isKiaGame?`<div style="display:flex;flex-direction:column;align-items:center;gap:1px">
@@ -1258,16 +1264,18 @@ function renderCalSplit(d) {
       const kiaHome=g.home==='KIA';
       const lKey=isKia&&kiaHome?g.home:g.away;
       const rKey=isKia&&kiaHome?g.away:g.home;
-      const isLive=g.status==='LIVE', isFinal=g.status==='FINAL';
+      const isLive=g.status==='LIVE', isFinal=g.status==='FINAL', isCanceled=g.status==='CANCELED';
       const scoreHtml = (isLive||isFinal)?
         `<div style="font-size:18px;font-weight:900;color:${d.text}">${kiaHome?(g.homeScore??0):(g.awayScore??0)} <span style="font-size:12px;color:${d.sub}">:</span> ${kiaHome?(g.awayScore??0):(g.homeScore??0)}</div>`:
+        isCanceled?`<div style="font-size:11px;font-weight:900;color:#2979FF">☔<br>우천<br>취소</div>`:
         `<div style="font-size:12px;font-weight:800;color:#FFB300">VS</div>`;
-      return `<div class="card${isKia?' kia':''}" onclick="openModal(${i},'${sel}')">
+      return `<div class="card${isKia?' kia':''}" style="${isCanceled?'opacity:0.65;':''}" onclick="openModal(${i},'${sel}')">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:5px">
             <button onclick="event.stopPropagation();toggleFavByKey('${g.date}','${g.away}','${g.home}')" style="font-size:16px;line-height:1;padding:0 2px">${isFav(g)?'⭐':'☆'}</button>
             ${isLive?`<span style="font-size:9px;background:#E31837;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;animation:fadeIn 0.5s infinite alternate">🔴 LIVE</span>`:
               isFinal?`<span style="font-size:9px;background:rgba(0,0,0,0.25);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">종료</span>`:
+              isCanceled?`<span style="font-size:9px;background:rgba(41,121,255,0.15);color:#2979FF;border-radius:4px;padding:1px 5px;font-weight:700;border:1px solid rgba(41,121,255,0.35)">☔ 우천취소</span>`:
               `<span style="font-size:11px;font-weight:700;color:#FFB300">${g.time} 시작</span>`}
             ${isKia?`<span class="tag-kia">🐯 KIA</span>`:''}
             ${formatInningBadge(g)?`<span class="tag-lu">${formatInningBadge(g)}</span>`:''}
@@ -3881,7 +3889,8 @@ function convertBrowserGame(game, detail) {
   const away = normalizeApiTeam(game.awayTeamCode, game.awayTeamName);
   const home = normalizeApiTeam(game.homeTeamCode, game.homeTeamName);
   const statusCode = game.statusCode || '';
-  const status = statusCode === 'BEFORE' ? 'SCHEDULED' : statusCode === 'STARTED' ? 'LIVE' : statusCode === 'RESULT' ? 'FINAL' : 'SCHEDULED';
+  const isCanceled = /CANCEL|PPD|RAIN|POSTPONE|SUSPENDED|취소/i.test(statusCode) || /CANCEL|PPD|RAIN|POSTPONE|SUSPENDED|취소/i.test(game.statusInfo||'');
+  const status = isCanceled ? 'CANCELED' : statusCode === 'BEFORE' ? 'SCHEDULED' : statusCode === 'STARTED' ? 'LIVE' : statusCode === 'RESULT' ? 'FINAL' : 'SCHEDULED';
   const awayRaw = gameData.awayTeamScoreByInning || game.awayTeamScoreByInning || [];
   const homeRaw = gameData.homeTeamScoreByInning || game.homeTeamScoreByInning || [];
   const awayInnings = Array(9).fill(-1);
